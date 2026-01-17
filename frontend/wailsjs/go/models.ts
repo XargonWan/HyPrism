@@ -149,6 +149,7 @@ export namespace config {
 	export class Config {
 	    version: string;
 	    nick: string;
+	    musicEnabled: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -158,6 +159,7 @@ export namespace config {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.version = source["version"];
 	        this.nick = source["nick"];
+	        this.musicEnabled = source["musicEnabled"];
 	    }
 	}
 

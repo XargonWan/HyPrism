@@ -19,7 +19,7 @@ export const BackgroundImage: React.FC = () => {
       {/* Background container */}
       <div className="absolute inset-0 overflow-hidden">
         {/* Static image background if available */}
-        {showImage && (
+        {showImage && backgroundImage && (
           <img
             src={backgroundImage}
             alt=""

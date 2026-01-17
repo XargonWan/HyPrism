@@ -70,14 +70,7 @@ func (a *App) Update() error {
 		fmt.Println("Warning: No checksum provided, skipping verification")
 	}
 
-	fmt.Println("Preparing update helper...")
-	helperPath, err := updater.EnsureUpdateHelper(a.ctx)
-	if err != nil {
-		fmt.Printf("Failed to prepare update helper: %v\n", err)
-		return FileSystemError("preparing updater", err)
-	}
-
-	fmt.Printf("Running update helper: %s\n", helperPath)
+	fmt.Println("Applying update...")
 
 	if err := updater.Apply(tmp); err != nil {
 		fmt.Printf("Failed to start update helper: %v\n", err)

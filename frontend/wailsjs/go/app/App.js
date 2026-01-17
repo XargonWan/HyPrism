@@ -82,12 +82,20 @@ export function GetInstalledVersions() {
   return window['go']['app']['App']['GetInstalledVersions']();
 }
 
+export function GetLauncherVersion() {
+  return window['go']['app']['App']['GetLauncherVersion']();
+}
+
 export function GetLogs() {
   return window['go']['app']['App']['GetLogs']();
 }
 
 export function GetModCategories() {
   return window['go']['app']['App']['GetModCategories']();
+}
+
+export function GetMusicEnabled() {
+  return window['go']['app']['App']['GetMusicEnabled']();
 }
 
 export function GetNews(arg1) {
@@ -154,6 +162,10 @@ export function RenameWorld(arg1, arg2) {
   return window['go']['app']['App']['RenameWorld'](arg1, arg2);
 }
 
+export function RepairInstallation() {
+  return window['go']['app']['App']['RepairInstallation']();
+}
+
 export function RestoreBackup(arg1) {
   return window['go']['app']['App']['RestoreBackup'](arg1);
 }
@@ -176,6 +188,10 @@ export function SaveSkinPreset(arg1) {
 
 export function SearchMods(arg1, arg2, arg3) {
   return window['go']['app']['App']['SearchMods'](arg1, arg2, arg3);
+}
+
+export function SetMusicEnabled(arg1) {
+  return window['go']['app']['App']['SetMusicEnabled'](arg1);
 }
 
 export function SetNick(arg1) {

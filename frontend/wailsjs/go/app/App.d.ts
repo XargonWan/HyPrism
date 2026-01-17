@@ -48,9 +48,13 @@ export function GetInstalledMods():Promise<Array<mods.Mod>>;
 
 export function GetInstalledVersions():Promise<Array<app.InstalledVersion>>;
 
+export function GetLauncherVersion():Promise<string>;
+
 export function GetLogs():Promise<string>;
 
 export function GetModCategories():Promise<Array<mods.ModCategory>>;
+
+export function GetMusicEnabled():Promise<boolean>;
 
 export function GetNews(arg1:number):Promise<Array<news.NewsItem>>;
 
@@ -84,6 +88,8 @@ export function QuickLaunch():Promise<void>;
 
 export function RenameWorld(arg1:string,arg2:string):Promise<void>;
 
+export function RepairInstallation():Promise<void>;
+
 export function RestoreBackup(arg1:string):Promise<worlds.World>;
 
 export function RunDiagnostics():Promise<app.DiagnosticReport>;
@@ -95,6 +101,8 @@ export function SaveDiagnosticReport():Promise<string>;
 export function SaveSkinPreset(arg1:skin.AvatarPreset):Promise<void>;
 
 export function SearchMods(arg1:string,arg2:number,arg3:number):Promise<mods.SearchResult>;
+
+export function SetMusicEnabled(arg1:boolean):Promise<void>;
 
 export function SetNick(arg1:string):Promise<void>;
 

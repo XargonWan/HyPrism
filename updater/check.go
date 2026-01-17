@@ -18,23 +18,19 @@ type UpdateInfo struct {
 	Linux   struct {
 		Amd64 struct {
 			Launcher Asset `json:"launcher"`
-			Helper   Asset `json:"helper"`
 		} `json:"amd64"`
 	} `json:"linux"`
 	Windows struct {
 		Amd64 struct {
 			Launcher Asset `json:"launcher"`
-			Helper   Asset `json:"helper"`
 		} `json:"amd64"`
 	} `json:"windows"`
 	Darwin struct {
 		Amd64 struct {
 			Launcher Asset `json:"launcher"`
-			Helper   Asset `json:"helper"`
 		} `json:"amd64"`
 		Arm64 struct {
 			Launcher Asset `json:"launcher"`
-			Helper   Asset `json:"helper"`
 		} `json:"arm64"`
 	} `json:"darwin"`
 }
@@ -86,32 +82,9 @@ func CheckUpdate(ctx context.Context, current string) (*Asset, string, error) {
 	return asset, info.Version, nil
 }
 
-// GetHelperAsset returns the update helper asset
+// GetHelperAsset is deprecated - updates now use built-in scripts
 func GetHelperAsset(ctx context.Context) (*Asset, error) {
-	info, err := fetchUpdateInfo(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var asset *Asset
-	switch runtime.GOOS {
-	case "windows":
-		asset = &info.Windows.Amd64.Helper
-	case "darwin":
-		if runtime.GOARCH == "arm64" {
-			asset = &info.Darwin.Arm64.Helper
-		} else {
-			asset = &info.Darwin.Amd64.Helper
-		}
-	default:
-		asset = &info.Linux.Amd64.Helper
-	}
-
-	if asset.URL == "" {
-		return nil, fmt.Errorf("no helper URL found for %s/%s", runtime.GOOS, runtime.GOARCH)
-	}
-
-	return asset, nil
+	return nil, fmt.Errorf("helper-based updates are no longer used")
 }
 
 func fetchUpdateInfo(ctx context.Context) (*UpdateInfo, error) {

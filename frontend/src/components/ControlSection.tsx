@@ -1,18 +1,11 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { FolderOpen, Trash, Play, Package, Square, ChevronDown, Download, Check } from 'lucide-react';
-
-interface InstalledVersion {
-  version: number;
-  versionType: string;
-  installDate: string;
-}
+import React from 'react';
+import { motion } from 'framer-motion';
+import { FolderOpen, Trash, Play, Package, Square, Download } from 'lucide-react';
 
 interface ControlSectionProps {
   onPlay: () => void;
   onExit?: () => void;
   onInstallVersion?: (version: number) => void;
-  onSwitchVersion?: (version: number) => void;
   isDownloading: boolean;
   isGameRunning: boolean;
   progress: number;
@@ -23,7 +16,6 @@ interface ControlSectionProps {
   currentFile: string;
   currentVersion: string;
   latestVersion: number;
-  installedVersions: InstalledVersion[];
   actions: {
     openFolder: () => void;
     showDelete: () => void;
@@ -60,7 +52,6 @@ export const ControlSection: React.FC<ControlSectionProps> = ({
   onPlay,
   onExit,
   onInstallVersion,
-  onSwitchVersion,
   isDownloading,
   isGameRunning,
   progress,
@@ -71,11 +62,8 @@ export const ControlSection: React.FC<ControlSectionProps> = ({
   currentFile,
   currentVersion,
   latestVersion,
-  installedVersions,
   actions
 }) => {
-  const [showVersionDropdown, setShowVersionDropdown] = useState(false);
-
   // Parse current version number
   const currentVersionNum = parseInt(currentVersion.match(/build (\d+)/)?.[1] || '0');
   const hasUpdate = currentVersionNum > 0 && latestVersion > currentVersionNum;
@@ -142,85 +130,6 @@ export const ControlSection: React.FC<ControlSectionProps> = ({
             <h3 className="text-lg font-bold text-white">
               {isGameRunning ? 'Game Running' : isDownloading ? 'Downloading Hytale' : 'Hytale'}
             </h3>
-            {/* Version Manager Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowVersionDropdown(!showVersionDropdown)}
-                disabled={isDownloading || isGameRunning}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-sm disabled:opacity-50"
-              >
-                <span className="text-gray-300">Versions</span>
-                <ChevronDown size={14} className={`text-gray-400 transition-transform ${showVersionDropdown ? 'rotate-180' : ''}`} />
-              </button>
-              
-              <AnimatePresence>
-                {showVersionDropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -5 }}
-                    className="absolute right-0 top-full mt-1 bg-[#1a1a1a] border border-white/10 rounded-lg overflow-hidden z-50 min-w-[220px] max-h-[300px] overflow-y-auto"
-                  >
-                    {/* Latest Version */}
-                    <div className="px-3 py-2 border-b border-white/10">
-                      <p className="text-xs text-gray-500 mb-2">Latest Available</p>
-                      <button
-                        onClick={() => {
-                          onInstallVersion?.(latestVersion);
-                          setShowVersionDropdown(false);
-                        }}
-                        disabled={currentVersionNum === latestVersion}
-                        className={`w-full px-3 py-2 text-left text-sm rounded-lg transition-colors flex justify-between items-center ${
-                          currentVersionNum === latestVersion 
-                            ? 'bg-[#FFA845]/20 text-[#FFA845]' 
-                            : 'bg-white/5 hover:bg-white/10 text-gray-300'
-                        }`}
-                      >
-                        <span className="flex items-center gap-2">
-                          {currentVersionNum === latestVersion && <Check size={14} />}
-                          Build {latestVersion}
-                        </span>
-                        {currentVersionNum !== latestVersion && (
-                          <span className="flex items-center gap-1 text-xs text-[#FFA845]">
-                            <Download size={12} />
-                            Install
-                          </span>
-                        )}
-                      </button>
-                    </div>
-                    
-                    {/* Installed Versions */}
-                    {installedVersions.length > 0 && (
-                      <div className="px-3 py-2">
-                        <p className="text-xs text-gray-500 mb-2">Installed Versions</p>
-                        <div className="space-y-1">
-                          {installedVersions.map((v) => (
-                            <button
-                              key={v.version}
-                              onClick={() => {
-                                onSwitchVersion?.(v.version);
-                                setShowVersionDropdown(false);
-                              }}
-                              className={`w-full px-3 py-2 text-left text-sm rounded-lg transition-colors flex justify-between items-center ${
-                                currentVersionNum === v.version 
-                                  ? 'bg-[#FFA845]/20 text-[#FFA845]' 
-                                  : 'hover:bg-white/10 text-gray-300'
-                              }`}
-                            >
-                              <span className="flex items-center gap-2">
-                                {currentVersionNum === v.version && <Check size={14} />}
-                                Build {v.version}
-                              </span>
-                              <span className="text-xs text-gray-500">{v.installDate}</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
           </div>
           
           {/* Current Version & Update */}
@@ -268,13 +177,6 @@ export const ControlSection: React.FC<ControlSectionProps> = ({
                 {currentFile}
               </p>
             )}
-          </div>
-        )}
-
-        {!isDownloading && (
-          <div className="flex items-center gap-2 mt-4">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-sm text-gray-400">Online mode available</span>
           </div>
         )}
       </div>

@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 )
 
 // Apply applies a launcher update on Windows
@@ -17,17 +18,31 @@ func Apply(tmp string) error {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
-	helper := filepath.Join(filepath.Dir(exe), "update-helper.exe")
+	// Create a batch script to replace the executable
+	scriptPath := filepath.Join(os.TempDir(), "hyprism-update.bat")
+	script := fmt.Sprintf(`@echo off
+timeout /t 1 /nobreak >nul
+del /f /q "%s.old" 2>nul
+ren "%s" "%s.old" 2>nul
+copy /y "%s" "%s" >nul
+del /f /q "%s.old" 2>nul
+del /f /q "%s" 2>nul
+exit
+`,
+		exe, exe, filepath.Base(exe), tmp, exe, exe, tmp)
 
-	if _, err := os.Stat(helper); err != nil {
-		return fmt.Errorf("update helper not found: %w", err)
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		return fmt.Errorf("failed to create update script: %w", err)
 	}
 
-	cmd := exec.Command(helper, exe, tmp)
+	cmd := exec.Command("cmd.exe", "/C", scriptPath)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		CreationFlags: syscall.CREATE_NO_WINDOW,
+	}
 	util.HideConsoleWindow(cmd)
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start update helper: %w", err)
+		return fmt.Errorf("failed to start update script: %w", err)
 	}
 
 	os.Exit(0)

@@ -217,10 +217,6 @@ jobs:
                 "launcher": {
                   "url": "https://github.com/yyyumeniku/HyPrism/releases/download/v$VERSION/HyPrism-x86_64.AppImage",
                   "sha256": ""
-                },
-                "helper": {
-                  "url": "",
-                  "sha256": ""
                 }
               }
             },
@@ -228,10 +224,6 @@ jobs:
               "amd64": {
                 "launcher": {
                   "url": "https://github.com/yyyumeniku/HyPrism/releases/download/v$VERSION/HyPrism.exe",
-                  "sha256": ""
-                },
-                "helper": {
-                  "url": "",
                   "sha256": ""
                 }
               }
@@ -241,19 +233,11 @@ jobs:
                 "launcher": {
                   "url": "",
                   "sha256": ""
-                },
-                "helper": {
-                  "url": "",
-                  "sha256": ""
                 }
               },
               "arm64": {
                 "launcher": {
                   "url": "https://github.com/yyyumeniku/HyPrism/releases/download/v$VERSION/HyPrism-macOS-arm64.dmg",
-                  "sha256": ""
-                },
-                "helper": {
-                  "url": "",
                   "sha256": ""
                 }
               }

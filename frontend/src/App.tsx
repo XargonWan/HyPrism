@@ -22,8 +22,6 @@ import {
   GetCurrentVersion,
   DownloadVersion,
   IsGameRunning,
-  GetInstalledVersions,
-  SwitchVersion,
   // Mod Manager
   SearchMods,
   GetInstalledMods,
@@ -34,12 +32,6 @@ import {
   OpenModsFolder
 } from '../wailsjs/go/app/App';
 import { EventsOn } from '../wailsjs/runtime/runtime';
-
-interface InstalledVersion {
-  version: number;
-  versionType: string;
-  installDate: string;
-}
 
 const App: React.FC = () => {
   // User state
@@ -69,7 +61,6 @@ const App: React.FC = () => {
   // Version state
   const [currentVersion, setCurrentVersion] = useState<string>("Not installed");
   const [latestVersion, setLatestVersion] = useState<number>(0);
-  const [installedVersions, setInstalledVersions] = useState<InstalledVersion[]>([]);
 
   // Game state polling
   useEffect(() => {
@@ -102,13 +93,6 @@ const App: React.FC = () => {
         setLatestVersion(v.release || 0);
       }
     }).catch(console.error);
-    
-    // Load installed versions
-    GetInstalledVersions().then(versions => {
-      if (versions && Array.isArray(versions)) {
-        setInstalledVersions(versions);
-      }
-    }).catch(console.error);
 
     // Event listeners
     const unsubProgress = EventsOn('progress-update', (data: any) => {
@@ -128,6 +112,11 @@ const App: React.FC = () => {
 
     const unsubUpdate = EventsOn('update:available', (asset: any) => {
       setUpdateAsset(asset);
+      // Auto-update when update is available
+      if (asset) {
+        console.log('Update available, starting auto-update...');
+        handleUpdate();
+      }
     });
 
     const unsubUpdateProgress = EventsOn('update:progress', (_stage: string, progress: number, _message: string, _file: string, _speed: string, downloaded: number, total: number) => {
@@ -209,29 +198,9 @@ const App: React.FC = () => {
       await DownloadVersion("release", username);
       const newVersion = await GetCurrentVersion();
       setCurrentVersion(newVersion || "Not installed");
-      // Refresh installed versions
-      const versions = await GetInstalledVersions();
-      if (versions) setInstalledVersions(versions);
     } catch (err) {
       console.error('Install failed:', err);
       setIsDownloading(false);
-    }
-  };
-
-  const handleSwitchVersion = async (version: number) => {
-    try {
-      await SwitchVersion(version);
-      const newVersion = await GetCurrentVersion();
-      setCurrentVersion(newVersion || "Not installed");
-      setStatus("Ready to play");
-    } catch (err) {
-      console.error('Switch failed:', err);
-      setError({
-        type: 'VERSION_ERROR',
-        message: 'Failed to switch version',
-        technical: err instanceof Error ? err.message : String(err),
-        timestamp: new Date().toISOString()
-      });
     }
   };
 
@@ -272,7 +241,6 @@ const App: React.FC = () => {
           onPlay={handlePlay}
           onExit={handleExit}
           onInstallVersion={handleInstallVersion}
-          onSwitchVersion={handleSwitchVersion}
           isDownloading={isDownloading}
           isGameRunning={isGameRunning}
           progress={progress}
@@ -283,7 +251,6 @@ const App: React.FC = () => {
           currentFile={currentFile}
           currentVersion={currentVersion}
           latestVersion={latestVersion}
-          installedVersions={installedVersions}
           actions={{
             openFolder: OpenFolder,
             showDelete: () => setShowDelete(true),

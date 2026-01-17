@@ -102,6 +102,11 @@ func (a *App) emitError(err error) {
 // AppVersion is the current launcher version - set at build time via ldflags
 var AppVersion string = "dev"
 
+// GetLauncherVersion returns the current launcher version
+func (a *App) GetLauncherVersion() string {
+	return AppVersion
+}
+
 // GetVersions returns current and latest game versions
 func (a *App) GetVersions() (currentVersion string, latestVersion string) {
 	current := pwr.GetLocalVersion()

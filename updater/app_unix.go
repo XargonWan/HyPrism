@@ -17,28 +17,40 @@ func Apply(tmp string) error {
 		return fmt.Errorf("failed to get executable path: %w", err)
 	}
 
-	helperName := "update-helper"
-	helper := filepath.Join(filepath.Dir(exe), helperName)
+	// Create a shell script to replace the binary
+	scriptPath := filepath.Join(os.TempDir(), "hyprism-update.sh")
+	script := fmt.Sprintf(`#!/bin/bash
+sleep 1
+mv "%s" "%s.old" 2>/dev/null
+cp "%s" "%s"
+chmod +x "%s"
+rm -f "%s.old"
+rm -f "%s"
+`, exe, exe, tmp, exe, exe, exe, tmp)
 
-	if _, err := os.Stat(helper); err != nil {
-		return fmt.Errorf("update helper not found: %w", err)
-	}
-
-	// Make helper executable
-	os.Chmod(helper, 0755)
-
-	var cmd *exec.Cmd
 	if runtime.GOOS == "darwin" {
-		cmd = exec.Command(helper, exe, tmp)
-	} else {
-		cmd = exec.Command(helper, exe, tmp)
+		// For macOS, we need to handle .app bundles differently
+		script = fmt.Sprintf(`#!/bin/bash
+sleep 1
+rm -rf "%s.old" 2>/dev/null
+mv "%s" "%s.old" 2>/dev/null
+cp -R "%s" "%s"
+chmod +x "%s"
+rm -rf "%s.old"
+rm -rf "%s"
+`, exe, exe, exe, tmp, exe, exe, exe, tmp)
 	}
 
+	if err := os.WriteFile(scriptPath, []byte(script), 0755); err != nil {
+		return fmt.Errorf("failed to create update script: %w", err)
+	}
+
+	cmd := exec.Command("/bin/bash", scriptPath)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start update helper: %w", err)
+		return fmt.Errorf("failed to start update script: %w", err)
 	}
 
 	os.Exit(0)
