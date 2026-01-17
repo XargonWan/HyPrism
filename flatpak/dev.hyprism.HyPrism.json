@@ -1,0 +1,68 @@
+{
+  "app-id": "dev.hyprism.HyPrism",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "46",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": [
+    "org.freedesktop.Sdk.Extension.golang",
+    "org.freedesktop.Sdk.Extension.node18"
+  ],
+  "command": "HyPrism",
+  "finish-args": [
+    "--share=ipc",
+    "--socket=fallback-x11",
+    "--socket=wayland",
+    "--socket=pulseaudio",
+    "--share=network",
+    "--device=dri",
+    "--filesystem=home",
+    "--filesystem=xdg-documents",
+    "--filesystem=xdg-download",
+    "--talk-name=org.freedesktop.Notifications",
+    "--talk-name=org.freedesktop.secrets",
+    "--env=XDG_CURRENT_DESKTOP=GNOME"
+  ],
+  "build-options": {
+    "append-path": "/usr/lib/sdk/golang/bin:/usr/lib/sdk/node18/bin",
+    "env": {
+      "GOPATH": "/run/build/HyPrism/go",
+      "GOROOT": "/usr/lib/sdk/golang",
+      "NPM_CONFIG_LOGLEVEL": "info"
+    }
+  },
+  "modules": [
+    {
+      "name": "webkit2gtk-4.0",
+      "buildsystem": "simple",
+      "build-commands": [
+        "echo 'WebKit2GTK is provided by the runtime'"
+      ]
+    },
+    {
+      "name": "wails",
+      "buildsystem": "simple",
+      "build-commands": [
+        "go install github.com/wailsapp/wails/v2/cmd/wails@latest"
+      ],
+      "sources": []
+    },
+    {
+      "name": "HyPrism",
+      "buildsystem": "simple",
+      "build-commands": [
+        "cd frontend && npm install",
+        "wails build -clean -o HyPrism",
+        "install -Dm755 build/bin/HyPrism /app/bin/HyPrism",
+        "install -Dm644 build/appicon.png /app/share/icons/hicolor/256x256/apps/dev.hyprism.HyPrism.png",
+        "install -Dm644 flatpak/dev.hyprism.HyPrism.desktop /app/share/applications/dev.hyprism.HyPrism.desktop",
+        "install -Dm644 flatpak/dev.hyprism.HyPrism.metainfo.xml /app/share/metainfo/dev.hyprism.HyPrism.metainfo.xml"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": "."
+        }
+      ]
+    }
+  ]
+}

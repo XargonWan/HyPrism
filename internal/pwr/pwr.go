@@ -162,3 +162,78 @@ func ApplyPWR(ctx context.Context, pwrFile string, progressCallback func(stage s
 	fmt.Println("Installation complete")
 	return nil
 }
+
+// ApplyPWRToDir applies a PWR patch file to a specific directory
+func ApplyPWRToDir(ctx context.Context, pwrFile string, targetDir string, progressCallback func(stage string, progress float64, message string, currentFile string, speed string, downloaded, total int64)) error {
+	stagingDir := filepath.Join(targetDir, "staging-temp")
+	
+	// Get Butler path
+	butlerPath, err := butler.GetButlerPath()
+	if err != nil {
+		return fmt.Errorf("butler not found: %w", err)
+	}
+	
+	// Clean staging directory
+	if progressCallback != nil {
+		progressCallback("install", 0, "Preparing installation...", "", "", 0, 0)
+	}
+	cleanStagingDirectory(targetDir)
+	
+	// Create directories
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return fmt.Errorf("failed to create target directory: %w", err)
+	}
+	if err := os.MkdirAll(stagingDir, 0755); err != nil {
+		return fmt.Errorf("failed to create staging directory: %w", err)
+	}
+
+	if progressCallback != nil {
+		progressCallback("install", 5, "Installing game...", "", "", 0, 0)
+	}
+
+	fmt.Printf("Applying PWR patch with Butler: %s -> %s\n", pwrFile, targetDir)
+	
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.CommandContext(ctx, butlerPath, "apply", "--staging-dir", stagingDir, "--save-interval=60", pwrFile, targetDir)
+	} else {
+		cmd = exec.CommandContext(ctx, butlerPath, "apply", "--staging-dir", stagingDir, pwrFile, targetDir)
+	}
+	
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("Butler error output: %s\n", string(output))
+		cleanStagingDirectory(targetDir)
+		return fmt.Errorf("butler apply failed: %w\nOutput: %s", err, string(output))
+	}
+
+	fmt.Printf("Butler output: %s\n", string(output))
+
+	// Clean up staging directory
+	cleanStagingDirectory(targetDir)
+
+	// Clean up patch file
+	go func() {
+		time.Sleep(2 * time.Second)
+		os.Remove(pwrFile)
+	}()
+
+	if progressCallback != nil {
+		progressCallback("install", 100, "Installation complete", "", "", 0, 0)
+	}
+
+	// Set executable permissions on Unix
+	if runtime.GOOS != "windows" {
+		var clientPath string
+		switch runtime.GOOS {
+		case "darwin":
+			clientPath = filepath.Join(targetDir, "Client", "Hytale.app", "Contents", "MacOS", "HytaleClient")
+		default:
+			clientPath = filepath.Join(targetDir, "Client", "HytaleClient")
+		}
+		os.Chmod(clientPath, 0755)
+	}
+
+	fmt.Println("Installation to directory complete")
+	return nil
+}

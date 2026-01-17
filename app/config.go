@@ -1,6 +1,9 @@
 package app
 
-import "HyPrism/internal/config"
+import (
+	"HyPrism/internal/config"
+	"HyPrism/internal/pwr"
+)
 
 // SetNick sets the player nickname
 func (a *App) SetNick(nick string) error {
@@ -32,4 +35,56 @@ func (a *App) SetMusicEnabled(enabled bool) error {
 // GetMusicEnabled returns the music enabled state
 func (a *App) GetMusicEnabled() bool {
 	return a.cfg.MusicEnabled
+}
+
+// GetVersionType returns the current version type (release or pre-release)
+func (a *App) GetVersionType() string {
+	if a.cfg.VersionType == "" {
+		return "release"
+	}
+	return a.cfg.VersionType
+}
+
+// SetVersionType sets the version type and saves it
+func (a *App) SetVersionType(versionType string) error {
+	if versionType != "release" && versionType != "pre-release" && versionType != "prerelease" {
+		versionType = "release"
+	}
+	// Normalize to API format
+	if versionType == "prerelease" {
+		versionType = "pre-release"
+	}
+	a.cfg.VersionType = versionType
+	return config.Save(a.cfg)
+}
+
+// GetSelectedVersion returns the currently selected version number
+func (a *App) GetSelectedVersion() int {
+	if a.cfg.SelectedVersion <= 0 {
+		// Return latest for current branch
+		return pwr.FindLatestVersion(a.GetVersionType())
+	}
+	return a.cfg.SelectedVersion
+}
+
+// SetSelectedVersion sets the selected version number
+func (a *App) SetSelectedVersion(version int) error {
+	a.cfg.SelectedVersion = version
+	return config.Save(a.cfg)
+}
+
+// VersionCheckInfo represents version availability information
+type VersionCheckInfo struct {
+	Available bool `json:"available"`
+	Version   int  `json:"version"`
+}
+
+// CheckVersionAvailability checks if a version is available for the current platform
+func (a *App) CheckVersionAvailability() VersionCheckInfo {
+	versionType := a.GetVersionType()
+	result := pwr.FindLatestVersionWithDetails(versionType)
+	return VersionCheckInfo{
+		Available: result.LatestVersion > 0,
+		Version:   result.LatestVersion,
+	}
 }

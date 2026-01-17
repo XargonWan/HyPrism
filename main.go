@@ -25,9 +25,6 @@ func main() {
 		Height:        720,
 		MinWidth:      1280,
 		MinHeight:     720,
-		MaxWidth:      1280,
-		MaxHeight:     720,
-		DisableResize: true,
 		Frameless:     true,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
@@ -41,10 +38,12 @@ func main() {
 		},
 		Windows: &windows.Options{
 			IsZoomControlEnabled:           false,
-			WebviewIsTransparent:           true,
+			WebviewIsTransparent:           false,
 			WindowIsTranslucent:            false,
 			DisableWindowIcon:              false,
 			DisableFramelessWindowDecorations: false,
+			WebviewUserDataPath:            "",
+			ZoomFactor:                     1.0,
 		},
 		Mac: &mac.Options{
 			TitleBar:             mac.TitleBarHiddenInset(),

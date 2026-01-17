@@ -150,17 +150,20 @@ jobs:
           
           # Create AppDir structure
           mkdir -p HyPrism.AppDir/usr/bin
+          mkdir -p HyPrism.AppDir/usr/lib
           mkdir -p HyPrism.AppDir/usr/share/applications
           mkdir -p HyPrism.AppDir/usr/share/icons/hicolor/256x256/apps
+          mkdir -p HyPrism.AppDir/usr/share/metainfo
           
           # Copy binary
           cp build/bin/HyPrism HyPrism.AppDir/usr/bin/
+          chmod +x HyPrism.AppDir/usr/bin/HyPrism
           
           # Copy icon
           cp build/appicon.png HyPrism.AppDir/usr/share/icons/hicolor/256x256/apps/hyprism.png
           cp build/appicon.png HyPrism.AppDir/hyprism.png
           
-          # Create desktop file
+          # Create desktop file (must be at root of AppDir)
           cat > HyPrism.AppDir/hyprism.desktop << 'DESKTOP'
           [Desktop Entry]
           Name=HyPrism
@@ -169,26 +172,112 @@ jobs:
           Type=Application
           Categories=Game;
           Terminal=false
+          StartupWMClass=HyPrism
+          Comment=A modern launcher for Hytale
           DESKTOP
           
-          # Create AppRun
+          # Copy desktop file to standard location too
+          cp HyPrism.AppDir/hyprism.desktop HyPrism.AppDir/usr/share/applications/
+          
+          # Create AppStream metadata (helps with SteamOS integration)
+          cat > HyPrism.AppDir/usr/share/metainfo/hyprism.appdata.xml << 'APPDATA'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <component type="desktop-application">
+            <id>dev.hyprism.HyPrism</id>
+            <name>HyPrism</name>
+            <summary>A modern launcher for Hytale</summary>
+            <metadata_license>MIT</metadata_license>
+            <project_license>MIT</project_license>
+            <description>
+              <p>HyPrism is an open-source, community-driven launcher for Hytale that provides mod management, multiple instances, and more.</p>
+            </description>
+            <categories>
+              <category>Game</category>
+            </categories>
+          </component>
+          APPDATA
+          
+          # Bundle required WebKit2GTK libraries for systems without them
+          # Copy critical libraries that might be missing on SteamOS
+          for lib in libwebkit2gtk-4.0.so.37 libjavascriptcoregtk-4.0.so.18; do
+            if [ -f "/usr/lib/x86_64-linux-gnu/$lib" ]; then
+              cp "/usr/lib/x86_64-linux-gnu/$lib" HyPrism.AppDir/usr/lib/ 2>/dev/null || true
+            fi
+          done
+          
+          # Create AppRun with better environment setup for SteamOS compatibility
           cat > HyPrism.AppDir/AppRun << 'APPRUN'
           #!/bin/bash
+          # AppRun script for HyPrism with SteamOS compatibility
+          
+          set -e
+          
           SELF=$(readlink -f "$0")
           HERE=${SELF%/*}
+          
+          # Add our bundled binaries and libraries to path
           export PATH="${HERE}/usr/bin:${PATH}"
-          export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
-          exec "${HERE}/usr/bin/HyPrism" "$@"
+          
+          # Add bundled libraries with proper fallback
+          if [ -d "${HERE}/usr/lib" ]; then
+            export LD_LIBRARY_PATH="${HERE}/usr/lib:${LD_LIBRARY_PATH}"
+          fi
+          
+          # Handle XDG directories for proper file access
+          export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+          
+          # Fix for some GPU drivers on SteamOS
+          export WEBKIT_DISABLE_COMPOSITING_MODE="${WEBKIT_DISABLE_COMPOSITING_MODE:-0}"
+          
+          # Launch the application
+          cd "${HERE}/usr/bin"
+          exec ./HyPrism "$@"
           APPRUN
           chmod +x HyPrism.AppDir/AppRun
           
-          # Build AppImage with ARCH set
+          # Build AppImage with ARCH set and extract-and-run for compatibility
           ARCH=x86_64 ./appimagetool --appimage-extract-and-run HyPrism.AppDir HyPrism-x86_64.AppImage
           
           # Replace binary with AppImage
           rm -rf build/bin/*
           mv HyPrism-x86_64.AppImage build/bin/
+          
+          # Also create a tar.gz for systems where AppImage doesn't work
+          cd HyPrism.AppDir/usr/bin
+          tar -czvf ../../../HyPrism-linux-x86_64.tar.gz HyPrism
+          cd ../../..
+          mv HyPrism-linux-x86_64.tar.gz build/bin/
       
+      - name: Build Flatpak (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          # Install Flatpak and flatpak-builder
+          sudo apt-get install -y flatpak flatpak-builder
+          
+          # Add Flathub remote
+          sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          
+          # Install required runtimes and SDKs
+          sudo flatpak install -y flathub org.gnome.Platform//46 org.gnome.Sdk//46 || true
+          sudo flatpak install -y flathub org.freedesktop.Sdk.Extension.golang//23.08 || true
+          sudo flatpak install -y flathub org.freedesktop.Sdk.Extension.node18//23.08 || true
+          
+          # Build the Flatpak
+          flatpak-builder \
+            --force-clean \
+            --repo=flatpak-repo \
+            --state-dir=.flatpak-builder \
+            flatpak-build \
+            flatpak/dev.hyprism.HyPrism.json || echo "Flatpak build failed, skipping..."
+          
+          # Create bundle if build succeeded
+          if [ -d "flatpak-repo" ]; then
+            flatpak build-bundle flatpak-repo HyPrism.flatpak dev.hyprism.HyPrism || true
+            if [ -f "HyPrism.flatpak" ]; then
+              mv HyPrism.flatpak build/bin/
+            fi
+          fi
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -217,6 +306,14 @@ jobs:
               "amd64": {
                 "launcher": {
                   "url": "https://github.com/yyyumeniku/HyPrism/releases/download/v$VERSION/HyPrism-x86_64.AppImage",
+                  "sha256": ""
+                },
+                "tarball": {
+                  "url": "https://github.com/yyyumeniku/HyPrism/releases/download/v$VERSION/HyPrism-linux-x86_64.tar.gz",
+                  "sha256": ""
+                },
+                "flatpak": {
+                  "url": "https://github.com/yyyumeniku/HyPrism/releases/download/v$VERSION/HyPrism.flatpak",
                   "sha256": ""
                 }
               }

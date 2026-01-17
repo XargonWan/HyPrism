@@ -40,6 +40,16 @@ func getArch() string {
 	}
 }
 
+// normalizeVersionType converts version type to the API format
+// "prerelease" or "pre-release" -> "pre-release"
+// "release" -> "release"
+func normalizeVersionType(versionType string) string {
+	if versionType == "prerelease" || versionType == "pre-release" {
+		return "pre-release"
+	}
+	return versionType
+}
+
 // VersionCheckResult contains the result of a version check
 type VersionCheckResult struct {
 	LatestVersion int
@@ -64,41 +74,62 @@ func performVersionCheck(versionType string) VersionCheckResult {
 	
 	osName := getOS()
 	arch := getArch()
+	apiVersionType := normalizeVersionType(versionType)
 	
 	if osName == "unknown" {
 		result.Error = fmt.Errorf("unsupported operating system")
 		return result
 	}
 
-	client := &http.Client{
-		Timeout: 10 * time.Second,
+	// Use known latest versions as starting points for faster checking
+	// Release is around v3, Pre-release is around v7
+	var startVersion int
+	if apiVersionType == "pre-release" {
+		startVersion = 10 // Start checking from v10 down
+	} else {
+		startVersion = 5 // Start checking from v5 down
 	}
 
-	// Binary search for the latest version
-	low, high := 1, 1000
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	// Check versions in parallel from startVersion down to 1
+	type versionCheck struct {
+		version int
+		exists  bool
+		url     string
+	}
 	
-	for low <= high {
-		mid := (low + high) / 2
-		
-		url := fmt.Sprintf("https://game-patches.hytale.com/patches/%s/%s/%s/0/%d.pwr",
-			osName, arch, versionType, mid)
-		
-		result.CheckedURLs = append(result.CheckedURLs, url)
-
-		resp, err := client.Head(url)
-		time.Sleep(200 * time.Millisecond)
-
-		if err == nil && resp.StatusCode == http.StatusOK {
-			result.LatestVersion = mid
-			result.SuccessURL = url
-			low = mid + 1
-			fmt.Printf("Version %d exists\n", mid)
-		} else {
-			high = mid - 1
+	checkChan := make(chan versionCheck, startVersion)
+	
+	// Launch parallel checks
+	for v := 1; v <= startVersion; v++ {
+		go func(ver int) {
+			url := fmt.Sprintf("https://game-patches.hytale.com/patches/%s/%s/%s/0/%d.pwr",
+				osName, arch, apiVersionType, ver)
+			
+			resp, err := client.Head(url)
+			exists := err == nil && resp.StatusCode == http.StatusOK
+			if resp != nil {
+				resp.Body.Close()
+			}
+			
+			checkChan <- versionCheck{version: ver, exists: exists, url: url}
+		}(v)
+	}
+	
+	// Collect results
+	for i := 0; i < startVersion; i++ {
+		check := <-checkChan
+		result.CheckedURLs = append(result.CheckedURLs, check.url)
+		if check.exists && check.version > result.LatestVersion {
+			result.LatestVersion = check.version
+			result.SuccessURL = check.url
 		}
 	}
 
-	fmt.Printf("Latest version found: %d\n", result.LatestVersion)
+	fmt.Printf("Latest %s version found: %d\n", apiVersionType, result.LatestVersion)
 	return result
 }
 
@@ -145,10 +176,38 @@ func SaveLocalVersion(version int) error {
 func DownloadPWR(ctx context.Context, versionType string, fromVer, toVer int, progressCallback func(stage string, progress float64, message string, currentFile string, speed string, downloaded, total int64)) (string, error) {
 	osName := getOS()
 	arch := getArch()
+	apiVersionType := normalizeVersionType(versionType)
 
-	// Match Hytale-F2P URL format exactly: /patches/{os}/{arch}/{version}/0/{patchNum}.pwr
-	url := fmt.Sprintf("https://game-patches.hytale.com/patches/%s/%s/%s/%d/%d.pwr",
-		osName, arch, versionType, fromVer, toVer)
+	// Try patch URL - for fresh install always use 0 as fromVer
+	// The Hytale patch server provides full game at /0/{version}.pwr
+	var url string
+	var useFromZero bool
+	
+	// First try the incremental patch if we have a previous version
+	if fromVer > 0 {
+		url = fmt.Sprintf("https://game-patches.hytale.com/patches/%s/%s/%s/%d/%d.pwr",
+			osName, arch, apiVersionType, fromVer, toVer)
+		
+		// Quick check if incremental patch exists
+		client := &http.Client{Timeout: 10 * time.Second}
+		resp, err := client.Head(url)
+		if err != nil || resp.StatusCode != http.StatusOK {
+			// Incremental patch not available, use full install from 0
+			fmt.Printf("Incremental patch %d->%d not available, using full install\n", fromVer, toVer)
+			useFromZero = true
+		}
+		if resp != nil {
+			resp.Body.Close()
+		}
+	} else {
+		useFromZero = true
+	}
+	
+	// Use full game patch from version 0
+	if useFromZero {
+		url = fmt.Sprintf("https://game-patches.hytale.com/patches/%s/%s/%s/0/%d.pwr",
+			osName, arch, apiVersionType, toVer)
+	}
 
 	fmt.Printf("Downloading PWR from: %s\n", url)
 

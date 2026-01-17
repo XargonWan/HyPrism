@@ -3,16 +3,20 @@
 import {worlds} from '../models';
 import {mods} from '../models';
 import {updater} from '../models';
+import {app} from '../models';
 import {config} from '../models';
 import {skin} from '../models';
-import {app} from '../models';
 import {news} from '../models';
 
 export function BackupWorld(arg1:string):Promise<worlds.World>;
 
+export function CheckInstanceModUpdates(arg1:string,arg2:number):Promise<Array<mods.Mod>>;
+
 export function CheckModUpdates():Promise<Array<mods.Mod>>;
 
 export function CheckUpdate():Promise<updater.Asset>;
+
+export function CheckVersionAvailability():Promise<app.VersionCheckInfo>;
 
 export function DeleteBackup(arg1:string):Promise<void>;
 
@@ -48,6 +52,10 @@ export function GetInstalledMods():Promise<Array<mods.Mod>>;
 
 export function GetInstalledVersions():Promise<Array<app.InstalledVersion>>;
 
+export function GetInstalledVersionsForBranch(arg1:string):Promise<Array<number>>;
+
+export function GetInstanceInstalledMods(arg1:string,arg2:number):Promise<Array<mods.Mod>>;
+
 export function GetLauncherVersion():Promise<string>;
 
 export function GetLogs():Promise<string>;
@@ -55,6 +63,8 @@ export function GetLogs():Promise<string>;
 export function GetModCategories():Promise<Array<mods.ModCategory>>;
 
 export function GetModDetails(arg1:number):Promise<mods.CurseForgeMod>;
+
+export function GetModFiles(arg1:number):Promise<Array<mods.ModFile>>;
 
 export function GetMusicEnabled():Promise<boolean>;
 
@@ -64,7 +74,13 @@ export function GetNick():Promise<string>;
 
 export function GetPlatformInfo():Promise<Record<string, string>>;
 
+export function GetSelectedVersion():Promise<number>;
+
 export function GetSkinPreset():Promise<skin.AvatarPreset>;
+
+export function GetVersionList(arg1:string):Promise<Array<number>>;
+
+export function GetVersionType():Promise<string>;
 
 export function GetVersions():Promise<string|string>;
 
@@ -74,13 +90,23 @@ export function GetWorlds():Promise<Array<worlds.World>>;
 
 export function InstallMod(arg1:number):Promise<void>;
 
+export function InstallModFile(arg1:number,arg2:number):Promise<void>;
+
+export function InstallModFileToInstance(arg1:number,arg2:number,arg3:string,arg4:number):Promise<void>;
+
+export function InstallModToInstance(arg1:number,arg2:string,arg3:number):Promise<void>;
+
 export function IsGameInstalled():Promise<boolean>;
 
 export function IsGameRunning():Promise<boolean>;
 
+export function IsVersionInstalled(arg1:string,arg2:number):Promise<boolean>;
+
 export function OpenFolder():Promise<void>;
 
 export function OpenGameFolder():Promise<void>;
+
+export function OpenInstanceModsFolder(arg1:string,arg2:number):Promise<void>;
 
 export function OpenModsFolder():Promise<void>;
 
@@ -108,9 +134,17 @@ export function SetMusicEnabled(arg1:boolean):Promise<void>;
 
 export function SetNick(arg1:string):Promise<void>;
 
+export function SetSelectedVersion(arg1:number):Promise<void>;
+
+export function SetVersionType(arg1:string):Promise<void>;
+
 export function SwitchVersion(arg1:number):Promise<void>;
 
+export function ToggleInstanceMod(arg1:string,arg2:boolean,arg3:string,arg4:number):Promise<void>;
+
 export function ToggleMod(arg1:string,arg2:boolean):Promise<void>;
+
+export function UninstallInstanceMod(arg1:string,arg2:string,arg3:number):Promise<void>;
 
 export function UninstallMod(arg1:string):Promise<void>;
 

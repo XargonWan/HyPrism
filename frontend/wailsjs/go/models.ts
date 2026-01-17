@@ -141,6 +141,21 @@ export namespace app {
 	        this.installDate = source["installDate"];
 	    }
 	}
+	
+	export class VersionCheckInfo {
+	    available: boolean;
+	    version: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new VersionCheckInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.available = source["available"];
+	        this.version = source["version"];
+	    }
+	}
 
 }
 
@@ -150,6 +165,8 @@ export namespace config {
 	    version: string;
 	    nick: string;
 	    musicEnabled: boolean;
+	    versionType: string;
+	    selectedVersion: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -160,6 +177,8 @@ export namespace config {
 	        this.version = source["version"];
 	        this.nick = source["nick"];
 	        this.musicEnabled = source["musicEnabled"];
+	        this.versionType = source["versionType"];
+	        this.selectedVersion = source["selectedVersion"];
 	    }
 	}
 
@@ -336,11 +355,13 @@ export namespace mods {
 	export class Mod {
 	    id: string;
 	    name: string;
+	    slug?: string;
 	    version: string;
 	    author: string;
 	    description: string;
 	    downloadUrl?: string;
-	    curseforgeId?: number;
+	    curseForgeId?: number;
+	    fileId?: number;
 	    enabled: boolean;
 	    installedAt: string;
 	    updatedAt: string;
@@ -348,6 +369,8 @@ export namespace mods {
 	    iconUrl?: string;
 	    downloads?: number;
 	    category?: string;
+	    latestVersion?: string;
+	    latestFileId?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Mod(source);
@@ -357,11 +380,13 @@ export namespace mods {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
+	        this.slug = source["slug"];
 	        this.version = source["version"];
 	        this.author = source["author"];
 	        this.description = source["description"];
 	        this.downloadUrl = source["downloadUrl"];
-	        this.curseforgeId = source["curseforgeId"];
+	        this.curseForgeId = source["curseForgeId"];
+	        this.fileId = source["fileId"];
 	        this.enabled = source["enabled"];
 	        this.installedAt = source["installedAt"];
 	        this.updatedAt = source["updatedAt"];
@@ -369,6 +394,8 @@ export namespace mods {
 	        this.iconUrl = source["iconUrl"];
 	        this.downloads = source["downloads"];
 	        this.category = source["category"];
+	        this.latestVersion = source["latestVersion"];
+	        this.latestFileId = source["latestFileId"];
 	    }
 	}
 	

@@ -19,15 +19,13 @@ import {
   Update,
   ExitGame,
   IsGameRunning,
-  // Mod Manager
-  SearchMods,
-  GetInstalledMods,
-  GetModDetails,
-  InstallMod,
-  UninstallMod,
-  ToggleMod,
-  GetModCategories,
-  OpenModsFolder
+  // Version Manager
+  GetVersionType,
+  SetVersionType,
+  GetSelectedVersion,
+  SetSelectedVersion,
+  GetVersionList,
+  IsVersionInstalled
 } from '../wailsjs/go/app/App';
 import { EventsOn } from '../wailsjs/runtime/runtime';
 
@@ -53,6 +51,81 @@ const App: React.FC = () => {
   const [showModManager, setShowModManager] = useState<boolean>(false);
   const [error, setError] = useState<any>(null);
 
+  // Version state
+  const [currentBranch, setCurrentBranch] = useState<string>("release");
+  const [currentVersion, setCurrentVersion] = useState<number>(0);
+  const [availableVersions, setAvailableVersions] = useState<number[]>([]);
+  const [isLoadingVersions, setIsLoadingVersions] = useState<boolean>(false);
+  const [isVersionInstalled, setIsVersionInstalled] = useState<boolean>(false);
+  const [isCheckingInstalled, setIsCheckingInstalled] = useState<boolean>(false);
+
+  // Check if current version is installed when branch or version changes
+  useEffect(() => {
+    const checkInstalled = async () => {
+      if (currentVersion <= 0) {
+        setIsVersionInstalled(false);
+        return;
+      }
+      setIsCheckingInstalled(true);
+      try {
+        const installed = await IsVersionInstalled(currentBranch, currentVersion);
+        setIsVersionInstalled(installed);
+      } catch (e) {
+        console.error('Failed to check if version installed:', e);
+        setIsVersionInstalled(false);
+      }
+      setIsCheckingInstalled(false);
+    };
+    checkInstalled();
+  }, [currentBranch, currentVersion]);
+
+  // Load version list when branch changes
+  useEffect(() => {
+    const loadVersions = async () => {
+      setIsLoadingVersions(true);
+      try {
+        const versions = await GetVersionList(currentBranch);
+        setAvailableVersions(versions);
+        // If current version is not valid for this branch, set to latest
+        if (!versions.includes(currentVersion) && versions.length > 0) {
+          setCurrentVersion(versions[0]);
+          await SetSelectedVersion(versions[0]);
+        }
+      } catch (e) {
+        console.error('Failed to load versions:', e);
+        setAvailableVersions([]);
+      }
+      setIsLoadingVersions(false);
+    };
+    loadVersions();
+  }, [currentBranch]);
+
+  // Handle branch change - immediately load and set latest version for new branch
+  const handleBranchChange = async (branch: string) => {
+    setCurrentBranch(branch);
+    await SetVersionType(branch);
+    
+    // Load versions for new branch and set to latest
+    setIsLoadingVersions(true);
+    try {
+      const versions = await GetVersionList(branch);
+      setAvailableVersions(versions);
+      if (versions.length > 0) {
+        setCurrentVersion(versions[0]); // Set to latest version
+        await SetSelectedVersion(versions[0]);
+      }
+    } catch (e) {
+      console.error('Failed to load versions for branch:', e);
+    }
+    setIsLoadingVersions(false);
+  };
+
+  // Handle version change
+  const handleVersionChange = async (version: number) => {
+    setCurrentVersion(version);
+    await SetSelectedVersion(version);
+  };
+
   // Game state polling
   useEffect(() => {
     if (!isGameRunning) return;
@@ -73,8 +146,36 @@ const App: React.FC = () => {
   }, [isGameRunning]);
 
   useEffect(() => {
-    // Initialize
+    // Initialize user settings
     GetNick().then((n: string) => n && setUsername(n));
+    
+    // Load saved branch and version - must load branch first, then version
+    const loadSettings = async () => {
+      try {
+        // Get saved branch (defaults to "release" in backend if not set)
+        const savedBranch = await GetVersionType();
+        const branch = savedBranch || "release";
+        setCurrentBranch(branch);
+        
+        // Load version list for this branch
+        setIsLoadingVersions(true);
+        const versions = await GetVersionList(branch);
+        setAvailableVersions(versions);
+        
+        // Get saved version
+        const savedVersion = await GetSelectedVersion();
+        if (savedVersion > 0 && versions.includes(savedVersion)) {
+          setCurrentVersion(savedVersion);
+        } else if (versions.length > 0) {
+          setCurrentVersion(versions[0]);
+        }
+        setIsLoadingVersions(false);
+      } catch (e) {
+        console.error('Failed to load settings:', e);
+        setIsLoadingVersions(false);
+      }
+    };
+    loadSettings();
 
     // Event listeners
     const unsubProgress = EventsOn('progress-update', (data: any) => {
@@ -90,11 +191,8 @@ const App: React.FC = () => {
 
     const unsubUpdate = EventsOn('update:available', (asset: any) => {
       setUpdateAsset(asset);
-      // Auto-update when update is available
-      if (asset) {
-        console.log('Update available, starting auto-update...');
-        handleUpdate();
-      }
+      // Don't auto-update - let user click the update button
+      console.log('Update available:', asset);
     });
 
     const unsubUpdateProgress = EventsOn('update:progress', (_stage: string, progress: number, _message: string, _file: string, _speed: string, downloaded: number, total: number) => {
@@ -170,7 +268,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="relative w-screen h-screen max-w-[1280px] max-h-[720px] bg-[#090909] text-white overflow-hidden font-sans select-none mx-auto">
+    <div className="relative w-screen h-screen bg-[#090909] text-white overflow-hidden font-sans select-none">
       <BackgroundImage />
       <Titlebar />
       
@@ -204,12 +302,21 @@ const App: React.FC = () => {
 
         <ControlSection 
           onPlay={handlePlay}
+          onDownload={handlePlay}
           onExit={handleExit}
           isDownloading={isDownloading}
           isGameRunning={isGameRunning}
+          isVersionInstalled={isVersionInstalled}
+          isCheckingInstalled={isCheckingInstalled}
           progress={progress}
           downloaded={downloaded}
           total={total}
+          currentBranch={currentBranch}
+          currentVersion={currentVersion}
+          availableVersions={availableVersions}
+          isLoadingVersions={isLoadingVersions}
+          onBranchChange={handleBranchChange}
+          onVersionChange={handleVersionChange}
           actions={{
             openFolder: OpenFolder,
             showDelete: () => setShowDelete(true),
@@ -239,14 +346,8 @@ const App: React.FC = () => {
       {showModManager && (
         <ModManager
           onClose={() => setShowModManager(false)}
-          searchMods={SearchMods}
-          getInstalledMods={GetInstalledMods}
-          getModDetails={GetModDetails}
-          installMod={InstallMod}
-          uninstallMod={UninstallMod}
-          toggleMod={ToggleMod}
-          getModCategories={GetModCategories}
-          openModsFolder={OpenModsFolder}
+          currentBranch={currentBranch}
+          currentVersion={currentVersion}
         />
       )}
     </div>

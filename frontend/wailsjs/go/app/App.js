@@ -6,12 +6,20 @@ export function BackupWorld(arg1) {
   return window['go']['app']['App']['BackupWorld'](arg1);
 }
 
+export function CheckInstanceModUpdates(arg1, arg2) {
+  return window['go']['app']['App']['CheckInstanceModUpdates'](arg1, arg2);
+}
+
 export function CheckModUpdates() {
   return window['go']['app']['App']['CheckModUpdates']();
 }
 
 export function CheckUpdate() {
   return window['go']['app']['App']['CheckUpdate']();
+}
+
+export function CheckVersionAvailability() {
+  return window['go']['app']['App']['CheckVersionAvailability']();
 }
 
 export function DeleteBackup(arg1) {
@@ -82,6 +90,14 @@ export function GetInstalledVersions() {
   return window['go']['app']['App']['GetInstalledVersions']();
 }
 
+export function GetInstalledVersionsForBranch(arg1) {
+  return window['go']['app']['App']['GetInstalledVersionsForBranch'](arg1);
+}
+
+export function GetInstanceInstalledMods(arg1, arg2) {
+  return window['go']['app']['App']['GetInstanceInstalledMods'](arg1, arg2);
+}
+
 export function GetLauncherVersion() {
   return window['go']['app']['App']['GetLauncherVersion']();
 }
@@ -96,6 +112,10 @@ export function GetModCategories() {
 
 export function GetModDetails(arg1) {
   return window['go']['app']['App']['GetModDetails'](arg1);
+}
+
+export function GetModFiles(arg1) {
+  return window['go']['app']['App']['GetModFiles'](arg1);
 }
 
 export function GetMusicEnabled() {
@@ -114,8 +134,20 @@ export function GetPlatformInfo() {
   return window['go']['app']['App']['GetPlatformInfo']();
 }
 
+export function GetSelectedVersion() {
+  return window['go']['app']['App']['GetSelectedVersion']();
+}
+
 export function GetSkinPreset() {
   return window['go']['app']['App']['GetSkinPreset']();
+}
+
+export function GetVersionList(arg1) {
+  return window['go']['app']['App']['GetVersionList'](arg1);
+}
+
+export function GetVersionType() {
+  return window['go']['app']['App']['GetVersionType']();
 }
 
 export function GetVersions() {
@@ -134,6 +166,18 @@ export function InstallMod(arg1) {
   return window['go']['app']['App']['InstallMod'](arg1);
 }
 
+export function InstallModFile(arg1, arg2) {
+  return window['go']['app']['App']['InstallModFile'](arg1, arg2);
+}
+
+export function InstallModFileToInstance(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['InstallModFileToInstance'](arg1, arg2, arg3, arg4);
+}
+
+export function InstallModToInstance(arg1, arg2, arg3) {
+  return window['go']['app']['App']['InstallModToInstance'](arg1, arg2, arg3);
+}
+
 export function IsGameInstalled() {
   return window['go']['app']['App']['IsGameInstalled']();
 }
@@ -142,12 +186,20 @@ export function IsGameRunning() {
   return window['go']['app']['App']['IsGameRunning']();
 }
 
+export function IsVersionInstalled(arg1, arg2) {
+  return window['go']['app']['App']['IsVersionInstalled'](arg1, arg2);
+}
+
 export function OpenFolder() {
   return window['go']['app']['App']['OpenFolder']();
 }
 
 export function OpenGameFolder() {
   return window['go']['app']['App']['OpenGameFolder']();
+}
+
+export function OpenInstanceModsFolder(arg1, arg2) {
+  return window['go']['app']['App']['OpenInstanceModsFolder'](arg1, arg2);
 }
 
 export function OpenModsFolder() {
@@ -202,12 +254,28 @@ export function SetNick(arg1) {
   return window['go']['app']['App']['SetNick'](arg1);
 }
 
+export function SetSelectedVersion(arg1) {
+  return window['go']['app']['App']['SetSelectedVersion'](arg1);
+}
+
+export function SetVersionType(arg1) {
+  return window['go']['app']['App']['SetVersionType'](arg1);
+}
+
 export function SwitchVersion(arg1) {
   return window['go']['app']['App']['SwitchVersion'](arg1);
 }
 
+export function ToggleInstanceMod(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['ToggleInstanceMod'](arg1, arg2, arg3, arg4);
+}
+
 export function ToggleMod(arg1, arg2) {
   return window['go']['app']['App']['ToggleMod'](arg1, arg2);
+}
+
+export function UninstallInstanceMod(arg1, arg2, arg3) {
+  return window['go']['app']['App']['UninstallInstanceMod'](arg1, arg2, arg3);
 }
 
 export function UninstallMod(arg1) {

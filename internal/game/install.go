@@ -234,6 +234,122 @@ func EnsureInstalledVersion(ctx context.Context, versionType string, progress fu
 	return nil
 }
 
+// EnsureInstalledVersionSpecific ensures a specific branch AND version is installed
+func EnsureInstalledVersionSpecific(ctx context.Context, versionType string, version int, progress func(stage string, progress float64, msg string, file string, speed string, down, total int64)) error {
+	// Prevent multiple simultaneous installations
+	installMutex.Lock()
+	if isInstalling {
+		installMutex.Unlock()
+		return fmt.Errorf("installation already in progress")
+	}
+	isInstalling = true
+	installMutex.Unlock()
+
+	defer func() {
+		installMutex.Lock()
+		isInstalling = false
+		installMutex.Unlock()
+	}()
+
+	// Check if this specific version is already installed in instance folder
+	instanceGameDir := env.GetInstanceGameDir(versionType, version)
+	var clientPath string
+	switch runtime.GOOS {
+	case "darwin":
+		clientPath = filepath.Join(instanceGameDir, "Client", "Hytale.app", "Contents", "MacOS", "HytaleClient")
+	case "windows":
+		clientPath = filepath.Join(instanceGameDir, "Client", "HytaleClient.exe")
+	default:
+		clientPath = filepath.Join(instanceGameDir, "Client", "HytaleClient")
+	}
+
+	if _, err := os.Stat(clientPath); err == nil {
+		fmt.Printf("Instance %s v%d already installed at %s\n", versionType, version, instanceGameDir)
+		if progress != nil {
+			progress("complete", 100, fmt.Sprintf("%s v%d is ready", versionType, version), "", "", 0, 0)
+		}
+		return nil
+	}
+
+	// Download JRE
+	if err := java.DownloadJRE(ctx, progress); err != nil {
+		return fmt.Errorf("failed to download Java Runtime: %w", err)
+	}
+
+	// Install Butler
+	if _, err := butler.InstallButler(ctx, progress); err != nil {
+		return fmt.Errorf("failed to install Butler tool: %w", err)
+	}
+
+	if progress != nil {
+		progress("download", 0, fmt.Sprintf("Installing %s v%d...", versionType, version), "", "", 0, 0)
+	}
+
+	// Create instance folders
+	if err := env.CreateInstanceFolders(versionType, version); err != nil {
+		return fmt.Errorf("failed to create instance folders: %w", err)
+	}
+
+	// Install to instance-specific directory
+	if err := InstallGameToInstance(ctx, versionType, version, progress); err != nil {
+		return fmt.Errorf("failed to install game: %w", err)
+	}
+
+	return nil
+}
+
+// InstallGameToInstance installs the game to an instance-specific directory
+func InstallGameToInstance(ctx context.Context, versionType string, version int, progressCallback func(stage string, progress float64, message string, currentFile string, speed string, downloaded, total int64)) error {
+	instanceGameDir := env.GetInstanceGameDir(versionType, version)
+
+	// Download the patch file
+	pwrPath, err := pwr.DownloadPWR(ctx, versionType, 0, version, progressCallback)
+	if err != nil {
+		return fmt.Errorf("failed to download game patch: %w", err)
+	}
+
+	// Verify the patch file exists
+	info, err := os.Stat(pwrPath)
+	if err != nil {
+		return fmt.Errorf("patch file not accessible: %w", err)
+	}
+	fmt.Printf("Patch file size: %d bytes\n", info.Size())
+
+	// Apply the patch to instance directory
+	if progressCallback != nil {
+		progressCallback("install", 0, "Installing game...", "", "", 0, 0)
+	}
+
+	if err := pwr.ApplyPWRToDir(ctx, pwrPath, instanceGameDir, progressCallback); err != nil {
+		return fmt.Errorf("failed to apply game patch: %w", err)
+	}
+
+	// Verify installation
+	var clientPath string
+	switch runtime.GOOS {
+	case "darwin":
+		clientPath = filepath.Join(instanceGameDir, "Client", "Hytale.app", "Contents", "MacOS", "HytaleClient")
+	case "windows":
+		clientPath = filepath.Join(instanceGameDir, "Client", "HytaleClient.exe")
+	default:
+		clientPath = filepath.Join(instanceGameDir, "Client", "HytaleClient")
+	}
+
+	if _, err := os.Stat(clientPath); err != nil {
+		return fmt.Errorf("installation incomplete: client not found at %s", clientPath)
+	}
+
+	// Save version marker in instance directory
+	versionFile := filepath.Join(env.GetInstanceDir(versionType, version), "version.txt")
+	os.WriteFile(versionFile, []byte(fmt.Sprintf("%d", version)), 0644)
+
+	if progressCallback != nil {
+		progressCallback("complete", 100, fmt.Sprintf("%s v%d installed successfully", versionType, version), "", "", 0, 0)
+	}
+
+	return nil
+}
+
 func getFirstURL(urls []string) string {
 	if len(urls) == 0 {
 		return "none"

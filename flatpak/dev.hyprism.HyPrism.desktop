@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=HyPrism
+Comment=A modern launcher for Hytale
+Exec=HyPrism
+Icon=dev.hyprism.HyPrism
+Terminal=false
+Type=Application
+Categories=Game;
+Keywords=hytale;launcher;gaming;mods;
+StartupWMClass=HyPrism
+StartupNotify=true

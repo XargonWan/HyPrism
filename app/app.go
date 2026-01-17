@@ -129,17 +129,21 @@ func (a *App) DownloadAndLaunch(playerName string) error {
 		return err
 	}
 
-	// Ensure game is installed
-	if err := game.EnsureInstalled(a.ctx, a.progressCallback); err != nil {
+	// Get configured version type and version
+	versionType := a.GetVersionType()
+	version := a.GetSelectedVersion()
+
+	// Ensure game is installed for the configured version type and version
+	if err := game.EnsureInstalledVersionSpecific(a.ctx, versionType, version, a.progressCallback); err != nil {
 		wrappedErr := GameError("Failed to install or update game", err)
 		a.emitError(wrappedErr)
 		return wrappedErr
 	}
 
-	// Launch the game
+	// Launch the game with branch and version
 	a.progressCallback("launch", 100, "Launching game...", "", "", 0, 0)
 
-	if err := game.Launch(playerName, "latest"); err != nil {
+	if err := game.LaunchInstance(playerName, versionType, version); err != nil {
 		wrappedErr := GameError("Failed to launch game", err)
 		a.emitError(wrappedErr)
 		return wrappedErr
@@ -194,9 +198,14 @@ func (a *App) SearchMods(query string, categoryID int, page int) (*mods.SearchRe
 	})
 }
 
-// GetInstalledMods returns all installed mods
+// GetInstalledMods returns all installed mods (legacy)
 func (a *App) GetInstalledMods() ([]mods.Mod, error) {
 	return mods.GetInstalledMods()
+}
+
+// GetInstanceInstalledMods returns installed mods for a specific instance
+func (a *App) GetInstanceInstalledMods(branch string, version int) ([]mods.Mod, error) {
+	return mods.GetInstanceInstalledMods(branch, version)
 }
 
 // GetModDetails returns detailed info about a specific mod from CurseForge
@@ -204,7 +213,12 @@ func (a *App) GetModDetails(modID int) (*mods.CurseForgeMod, error) {
 	return mods.GetModDetails(a.ctx, modID)
 }
 
-// InstallMod downloads and installs a mod from CurseForge
+// GetModFiles returns available files/versions for a mod from CurseForge
+func (a *App) GetModFiles(modID int) ([]mods.ModFile, error) {
+	return mods.GetModFiles(a.ctx, modID)
+}
+
+// InstallMod downloads and installs a mod from CurseForge (legacy)
 func (a *App) InstallMod(modID int) error {
 	cfMod, err := mods.GetModDetails(a.ctx, modID)
 	if err != nil {
@@ -219,14 +233,59 @@ func (a *App) InstallMod(modID int) error {
 	})
 }
 
-// UninstallMod removes an installed mod
+// InstallModToInstance downloads and installs a mod to a specific instance
+func (a *App) InstallModToInstance(modID int, branch string, version int) error {
+	cfMod, err := mods.GetModDetails(a.ctx, modID)
+	if err != nil {
+		return err
+	}
+
+	return mods.DownloadModToInstance(a.ctx, *cfMod, branch, version, func(progress float64, message string) {
+		wailsRuntime.EventsEmit(a.ctx, "mod-progress", map[string]interface{}{
+			"progress": progress,
+			"message":  message,
+		})
+	})
+}
+
+// InstallModFile downloads and installs a specific mod file version from CurseForge (legacy)
+func (a *App) InstallModFile(modID int, fileID int) error {
+	return mods.DownloadModFile(a.ctx, modID, fileID, func(progress float64, message string) {
+		wailsRuntime.EventsEmit(a.ctx, "mod-progress", map[string]interface{}{
+			"progress": progress,
+			"message":  message,
+		})
+	})
+}
+
+// InstallModFileToInstance downloads and installs a specific mod file version to an instance
+func (a *App) InstallModFileToInstance(modID int, fileID int, branch string, version int) error {
+	return mods.DownloadModFileToInstance(a.ctx, modID, fileID, branch, version, func(progress float64, message string) {
+		wailsRuntime.EventsEmit(a.ctx, "mod-progress", map[string]interface{}{
+			"progress": progress,
+			"message":  message,
+		})
+	})
+}
+
+// UninstallMod removes an installed mod (legacy)
 func (a *App) UninstallMod(modID string) error {
 	return mods.RemoveMod(modID)
 }
 
-// ToggleMod enables or disables a mod
+// UninstallInstanceMod removes an installed mod from an instance
+func (a *App) UninstallInstanceMod(modID string, branch string, version int) error {
+	return mods.RemoveInstanceMod(modID, branch, version)
+}
+
+// ToggleMod enables or disables a mod (legacy)
 func (a *App) ToggleMod(modID string, enabled bool) error {
 	return mods.ToggleMod(modID, enabled)
+}
+
+// ToggleInstanceMod enables or disables a mod in an instance
+func (a *App) ToggleInstanceMod(modID string, enabled bool, branch string, version int) error {
+	return mods.ToggleInstanceMod(modID, enabled, branch, version)
 }
 
 // GetModCategories returns available mod categories
@@ -234,14 +293,28 @@ func (a *App) GetModCategories() ([]mods.ModCategory, error) {
 	return mods.GetCategories(a.ctx)
 }
 
-// CheckModUpdates checks for mod updates
+// CheckModUpdates checks for mod updates (legacy)
 func (a *App) CheckModUpdates() ([]mods.Mod, error) {
 	return mods.CheckForUpdates(a.ctx)
 }
 
-// OpenModsFolder opens the mods folder in file explorer
+// CheckInstanceModUpdates checks for mod updates in an instance
+func (a *App) CheckInstanceModUpdates(branch string, version int) ([]mods.Mod, error) {
+	return mods.CheckInstanceForUpdates(a.ctx, branch, version)
+}
+
+// OpenModsFolder opens the mods folder in file explorer (legacy)
 func (a *App) OpenModsFolder() error {
 	modsDir := mods.GetModsDir()
+	if err := os.MkdirAll(modsDir, 0755); err != nil {
+		return err
+	}
+	return openFolder(modsDir)
+}
+
+// OpenInstanceModsFolder opens the mods folder for a specific instance
+func (a *App) OpenInstanceModsFolder(branch string, version int) error {
+	modsDir := mods.GetInstanceModsDir(branch, version)
 	if err := os.MkdirAll(modsDir, 0755); err != nil {
 		return err
 	}
@@ -370,8 +443,32 @@ func (a *App) GetGameLogs() (string, error) {
 func (a *App) GetAvailableVersions() map[string]int {
 	versions := make(map[string]int)
 	versions["release"] = pwr.FindLatestVersion("release")
-	versions["prerelease"] = pwr.FindLatestVersion("prerelease")
+	versions["pre-release"] = pwr.FindLatestVersion("pre-release")
 	return versions
+}
+
+// GetVersionList returns all available version numbers for a branch (from latest down to 1)
+func (a *App) GetVersionList(branch string) []int {
+	latest := pwr.FindLatestVersion(branch)
+	if latest <= 0 {
+		return []int{}
+	}
+	// Return versions from latest to 1 (newest first)
+	versions := make([]int, latest)
+	for i := 0; i < latest; i++ {
+		versions[i] = latest - i
+	}
+	return versions
+}
+
+// IsVersionInstalled checks if a specific branch/version combination is installed
+func (a *App) IsVersionInstalled(branch string, version int) bool {
+	return env.IsVersionInstalled(branch, version)
+}
+
+// GetInstalledVersionsForBranch returns all installed version numbers for a specific branch
+func (a *App) GetInstalledVersionsForBranch(branch string) []int {
+	return env.GetInstalledVersions(branch)
 }
 
 // GetCurrentVersion returns the currently installed game version with formatted date

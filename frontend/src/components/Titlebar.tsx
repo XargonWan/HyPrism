@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Minus, X } from 'lucide-react';
-import { Quit, WindowMinimise } from '../../wailsjs/runtime/runtime';
+import { Minus, Square, X } from 'lucide-react';
+import { Quit, WindowMinimise, WindowToggleMaximise } from '../../wailsjs/runtime/runtime';
 import { GetLauncherVersion } from '../../wailsjs/go/app/App';
 import appIcon from '../assets/appicon.png';
 
@@ -13,7 +13,7 @@ export const Titlebar: React.FC = () => {
 
   return (
     <div 
-      className="absolute top-0 left-0 right-0 h-10 flex items-center justify-between px-4 z-50"
+      className="absolute top-0 left-0 right-0 h-10 flex items-center justify-between px-4 z-[100]"
       style={{ '--wails-draggable': 'drag' } as React.CSSProperties}
     >
       {/* Logo/Title */}
@@ -31,14 +31,21 @@ export const Titlebar: React.FC = () => {
       <div className="flex items-center gap-1" style={{ '--wails-draggable': 'no-drag' } as React.CSSProperties}>
         <button
           onClick={() => WindowMinimise()}
-          className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 active:scale-95 transition-all duration-150"
+          className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 active:scale-95"
         >
           <Minus size={14} className="text-white/60" />
         </button>
         
         <button
+          onClick={() => WindowToggleMaximise()}
+          className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/10 active:scale-95"
+        >
+          <Square size={12} className="text-white/60" />
+        </button>
+        
+        <button
           onClick={() => Quit()}
-          className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-red-500/80 active:scale-95 transition-all duration-150"
+          className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-red-500/80 active:scale-95"
         >
           <X size={14} className="text-white/60 hover:text-white" />
         </button>

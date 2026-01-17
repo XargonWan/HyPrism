@@ -136,8 +136,9 @@ func SearchMods(ctx context.Context, params SearchModsParams) (*SearchResult, er
 	if params.Query != "" {
 		q.Set("searchFilter", params.Query)
 	}
+	// Use classId for category filtering - CurseForge uses this for actual mod categorization
 	if params.CategoryID > 0 {
-		q.Set("categoryId", strconv.Itoa(params.CategoryID))
+		q.Set("classId", strconv.Itoa(params.CategoryID))
 	}
 	if params.SortField != "" {
 		q.Set("sortField", params.SortField)
@@ -268,7 +269,7 @@ func GetModFiles(ctx context.Context, modID int) ([]ModFile, error) {
 	return files, nil
 }
 
-// DownloadMod downloads and installs a mod
+// DownloadMod downloads and installs a mod (legacy)
 func DownloadMod(ctx context.Context, cfMod CurseForgeMod, progressCallback func(progress float64, message string)) error {
 	if len(cfMod.LatestFiles) == 0 {
 		return fmt.Errorf("no files available for mod %s", cfMod.Name)
@@ -330,11 +331,13 @@ func DownloadMod(ctx context.Context, cfMod CurseForgeMod, progressCallback func
 	mod := Mod{
 		ID:           fmt.Sprintf("cf-%d", cfMod.ID),
 		Name:         cfMod.Name,
+		Slug:         cfMod.Slug,
 		Version:      latestFile.DisplayName,
 		Author:       authorName,
 		Description:  cfMod.Summary,
 		DownloadURL:  latestFile.DownloadURL,
 		CurseForgeID: cfMod.ID,
+		FileID:       latestFile.ID,
 		Enabled:      true,
 		InstalledAt:  time.Now().Format(time.RFC3339),
 		UpdatedAt:    time.Now().Format(time.RFC3339),
@@ -353,6 +356,371 @@ func DownloadMod(ctx context.Context, cfMod CurseForgeMod, progressCallback func
 	}
 
 	return nil
+}
+
+// DownloadModFile downloads and installs a specific mod file version
+func DownloadModFile(ctx context.Context, modID int, fileID int, progressCallback func(progress float64, message string)) error {
+	// Get mod details
+	cfMod, err := GetModDetails(ctx, modID)
+	if err != nil {
+		return fmt.Errorf("failed to get mod details: %w", err)
+	}
+
+	// Get file details
+	url := fmt.Sprintf("%s/mods/%d/files/%d", curseForgeBaseURL, modID, fileID)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("x-api-key", cfAPIKey)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("file not found: %d", fileID)
+	}
+
+	var cfResp CurseForgeResponse
+	if err := json.NewDecoder(resp.Body).Decode(&cfResp); err != nil {
+		return err
+	}
+
+	var modFile ModFile
+	if err := json.Unmarshal(cfResp.Data, &modFile); err != nil {
+		return err
+	}
+
+	if modFile.DownloadURL == "" {
+		return fmt.Errorf("download not available for this mod file (author disabled distribution)")
+	}
+
+	// First, remove existing version of this mod if installed
+	existingModID := fmt.Sprintf("cf-%d", modID)
+	if err := RemoveMod(existingModID); err != nil {
+		// Ignore error if mod doesn't exist
+	}
+
+	modsDir := GetModsDir()
+	if err := os.MkdirAll(modsDir, 0755); err != nil {
+		return err
+	}
+
+	destPath := filepath.Join(modsDir, modFile.FileName)
+
+	if progressCallback != nil {
+		progressCallback(0, fmt.Sprintf("Downloading %s...", cfMod.Name))
+	}
+
+	// Download the file
+	if err := download.DownloadFile(ctx, modFile.DownloadURL, destPath, func(downloaded, total int64, speed string) {
+		if progressCallback != nil && total > 0 {
+			progress := float64(downloaded) / float64(total) * 100
+			progressCallback(progress, fmt.Sprintf("Downloading %s... %.1f%%", cfMod.Name, progress))
+		}
+	}); err != nil {
+		os.Remove(destPath)
+		return fmt.Errorf("failed to download mod: %w", err)
+	}
+
+	// Get author name
+	authorName := "Unknown"
+	if len(cfMod.Authors) > 0 {
+		authorName = cfMod.Authors[0].Name
+	}
+
+	// Get category
+	category := "General"
+	if len(cfMod.Categories) > 0 {
+		category = cfMod.Categories[0].Name
+	}
+
+	// Get icon URL
+	iconURL := ""
+	if cfMod.Logo != nil {
+		iconURL = cfMod.Logo.URL
+	}
+
+	// Add to manifest
+	mod := Mod{
+		ID:           fmt.Sprintf("cf-%d", cfMod.ID),
+		Name:         cfMod.Name,
+		Slug:         cfMod.Slug,
+		Version:      modFile.DisplayName,
+		Author:       authorName,
+		Description:  cfMod.Summary,
+		DownloadURL:  modFile.DownloadURL,
+		CurseForgeID: cfMod.ID,
+		FileID:       modFile.ID,
+		Enabled:      true,
+		InstalledAt:  time.Now().Format(time.RFC3339),
+		UpdatedAt:    time.Now().Format(time.RFC3339),
+		FilePath:     destPath,
+		IconURL:      iconURL,
+		Downloads:    cfMod.DownloadCount,
+		Category:     category,
+	}
+
+	if err := AddMod(mod); err != nil {
+		return err
+	}
+
+	if progressCallback != nil {
+		progressCallback(100, fmt.Sprintf("Installed %s v%s successfully!", cfMod.Name, modFile.DisplayName))
+	}
+
+	return nil
+}
+
+// DownloadModToInstance downloads and installs a mod to a specific instance
+func DownloadModToInstance(ctx context.Context, cfMod CurseForgeMod, branch string, version int, progressCallback func(progress float64, message string)) error {
+	if len(cfMod.LatestFiles) == 0 {
+		return fmt.Errorf("no files available for mod %s", cfMod.Name)
+	}
+
+	// Get the latest file
+	latestFile := cfMod.LatestFiles[0]
+	for _, f := range cfMod.LatestFiles {
+		if f.FileDate > latestFile.FileDate {
+			latestFile = f
+		}
+	}
+
+	if latestFile.DownloadURL == "" {
+		return fmt.Errorf("download not available for this mod (author disabled distribution)")
+	}
+
+	modsDir := GetInstanceModsDir(branch, version)
+	if err := os.MkdirAll(modsDir, 0755); err != nil {
+		return err
+	}
+
+	destPath := filepath.Join(modsDir, latestFile.FileName)
+
+	if progressCallback != nil {
+		progressCallback(0, fmt.Sprintf("Downloading %s...", cfMod.Name))
+	}
+
+	// Download the file
+	if err := download.DownloadFile(ctx, latestFile.DownloadURL, destPath, func(downloaded, total int64, speed string) {
+		if progressCallback != nil && total > 0 {
+			progress := float64(downloaded) / float64(total) * 100
+			progressCallback(progress, fmt.Sprintf("Downloading %s... %.1f%%", cfMod.Name, progress))
+		}
+	}); err != nil {
+		os.Remove(destPath)
+		return fmt.Errorf("failed to download mod: %w", err)
+	}
+
+	// Get author name
+	authorName := "Unknown"
+	if len(cfMod.Authors) > 0 {
+		authorName = cfMod.Authors[0].Name
+	}
+
+	// Get category
+	category := "General"
+	if len(cfMod.Categories) > 0 {
+		category = cfMod.Categories[0].Name
+	}
+
+	// Get icon URL
+	iconURL := ""
+	if cfMod.Logo != nil {
+		iconURL = cfMod.Logo.ThumbnailURL
+	}
+
+	// Add to instance manifest
+	mod := Mod{
+		ID:           fmt.Sprintf("cf-%d", cfMod.ID),
+		Name:         cfMod.Name,
+		Slug:         cfMod.Slug,
+		Version:      latestFile.DisplayName,
+		Author:       authorName,
+		Description:  cfMod.Summary,
+		DownloadURL:  latestFile.DownloadURL,
+		CurseForgeID: cfMod.ID,
+		FileID:       latestFile.ID,
+		Enabled:      true,
+		InstalledAt:  time.Now().Format(time.RFC3339),
+		UpdatedAt:    time.Now().Format(time.RFC3339),
+		FilePath:     destPath,
+		IconURL:      iconURL,
+		Downloads:    cfMod.DownloadCount,
+		Category:     category,
+	}
+
+	if err := AddInstanceMod(mod, branch, version); err != nil {
+		return err
+	}
+
+	if progressCallback != nil {
+		progressCallback(100, fmt.Sprintf("Installed %s successfully!", cfMod.Name))
+	}
+
+	return nil
+}
+
+// DownloadModFileToInstance downloads and installs a specific mod file version to an instance
+func DownloadModFileToInstance(ctx context.Context, modID int, fileID int, branch string, version int, progressCallback func(progress float64, message string)) error {
+	// Get mod details
+	cfMod, err := GetModDetails(ctx, modID)
+	if err != nil {
+		return fmt.Errorf("failed to get mod details: %w", err)
+	}
+
+	// Get file details
+	url := fmt.Sprintf("%s/mods/%d/files/%d", curseForgeBaseURL, modID, fileID)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("x-api-key", cfAPIKey)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("file not found: %d", fileID)
+	}
+
+	var cfResp CurseForgeResponse
+	if err := json.NewDecoder(resp.Body).Decode(&cfResp); err != nil {
+		return err
+	}
+
+	var modFile ModFile
+	if err := json.Unmarshal(cfResp.Data, &modFile); err != nil {
+		return err
+	}
+
+	if modFile.DownloadURL == "" {
+		return fmt.Errorf("download not available for this mod file (author disabled distribution)")
+	}
+
+	// First, remove existing version of this mod if installed
+	existingModID := fmt.Sprintf("cf-%d", modID)
+	_ = RemoveInstanceMod(existingModID, branch, version)
+
+	modsDir := GetInstanceModsDir(branch, version)
+	if err := os.MkdirAll(modsDir, 0755); err != nil {
+		return err
+	}
+
+	destPath := filepath.Join(modsDir, modFile.FileName)
+
+	if progressCallback != nil {
+		progressCallback(0, fmt.Sprintf("Downloading %s...", cfMod.Name))
+	}
+
+	// Download the file
+	if err := download.DownloadFile(ctx, modFile.DownloadURL, destPath, func(downloaded, total int64, speed string) {
+		if progressCallback != nil && total > 0 {
+			progress := float64(downloaded) / float64(total) * 100
+			progressCallback(progress, fmt.Sprintf("Downloading %s... %.1f%%", cfMod.Name, progress))
+		}
+	}); err != nil {
+		os.Remove(destPath)
+		return fmt.Errorf("failed to download mod: %w", err)
+	}
+
+	// Get author name
+	authorName := "Unknown"
+	if len(cfMod.Authors) > 0 {
+		authorName = cfMod.Authors[0].Name
+	}
+
+	// Get category
+	category := "General"
+	if len(cfMod.Categories) > 0 {
+		category = cfMod.Categories[0].Name
+	}
+
+	// Get icon URL
+	iconURL := ""
+	if cfMod.Logo != nil {
+		iconURL = cfMod.Logo.URL
+	}
+
+	// Add to instance manifest
+	mod := Mod{
+		ID:           fmt.Sprintf("cf-%d", cfMod.ID),
+		Name:         cfMod.Name,
+		Slug:         cfMod.Slug,
+		Version:      modFile.DisplayName,
+		Author:       authorName,
+		Description:  cfMod.Summary,
+		DownloadURL:  modFile.DownloadURL,
+		CurseForgeID: cfMod.ID,
+		FileID:       modFile.ID,
+		Enabled:      true,
+		InstalledAt:  time.Now().Format(time.RFC3339),
+		UpdatedAt:    time.Now().Format(time.RFC3339),
+		FilePath:     destPath,
+		IconURL:      iconURL,
+		Downloads:    cfMod.DownloadCount,
+		Category:     category,
+	}
+
+	if err := AddInstanceMod(mod, branch, version); err != nil {
+		return err
+	}
+
+	if progressCallback != nil {
+		progressCallback(100, fmt.Sprintf("Installed %s v%s successfully!", cfMod.Name, modFile.DisplayName))
+	}
+
+	return nil
+}
+
+// CheckInstanceForUpdates checks if any installed mods in an instance have updates
+func CheckInstanceForUpdates(ctx context.Context, branch string, version int) ([]Mod, error) {
+	mods, err := GetInstanceInstalledMods(branch, version)
+	if err != nil {
+		return nil, err
+	}
+
+	var modsWithUpdates []Mod
+
+	for _, mod := range mods {
+		if mod.CurseForgeID == 0 {
+			continue
+		}
+
+		cfMod, err := GetModDetails(ctx, mod.CurseForgeID)
+		if err != nil {
+			continue
+		}
+
+		// Find the latest file by date
+		var latestFile *ModFile
+		for i := range cfMod.LatestFiles {
+			if latestFile == nil || cfMod.LatestFiles[i].FileDate > latestFile.FileDate {
+				latestFile = &cfMod.LatestFiles[i]
+			}
+		}
+
+		// Check if there's a newer file by comparing file IDs
+		// If the installed file ID is different from the latest file ID, there's an update
+		if latestFile != nil && latestFile.ID != mod.FileID {
+			// Add update info to the mod
+			mod.LatestVersion = latestFile.DisplayName
+			mod.LatestFileID = latestFile.ID
+			modsWithUpdates = append(modsWithUpdates, mod)
+		}
+	}
+
+	return modsWithUpdates, nil
 }
 
 // GetCategories gets available mod categories for Hytale

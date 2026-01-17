@@ -204,6 +204,120 @@ export LD_LIBRARY_PATH="%s:$LD_LIBRARY_PATH"
 	return nil
 }
 
+// LaunchInstance launches a specific branch/version instance
+func LaunchInstance(playerName string, branch string, version int) error {
+	baseDir := env.GetDefaultAppDir()
+	
+	// Get instance-specific game directory
+	gameDir := env.GetInstanceGameDir(branch, version)
+	
+	// Verify client exists
+	var clientPath string
+	switch runtime.GOOS {
+	case "darwin":
+		clientPath = filepath.Join(gameDir, "Client", "Hytale.app", "Contents", "MacOS", "HytaleClient")
+	case "windows":
+		clientPath = filepath.Join(gameDir, "Client", "HytaleClient.exe")
+	default:
+		clientPath = filepath.Join(gameDir, "Client", "HytaleClient")
+	}
+
+	if _, err := os.Stat(clientPath); err != nil {
+		return fmt.Errorf("game client not found at %s (instance %s v%d not installed): %w", clientPath, branch, version, err)
+	}
+
+	// Use instance-specific UserData
+	userDataDir := env.GetInstanceUserDataDir(branch, version)
+	_ = os.MkdirAll(userDataDir, 0755)
+
+	// Set up Java path
+	var jrePath string
+	jreDir := filepath.Join(baseDir, "jre")
+	
+	switch runtime.GOOS {
+	case "darwin":
+		javaDir := filepath.Join(baseDir, "java")
+		javaHomeBin := filepath.Join(javaDir, "Contents", "Home", "bin")
+		
+		if _, err := os.Stat(javaHomeBin); err != nil {
+			os.RemoveAll(javaDir)
+			os.MkdirAll(filepath.Join(javaDir, "Contents", "Home"), 0755)
+			os.Symlink(filepath.Join(jreDir, "bin"), filepath.Join(javaDir, "Contents", "Home", "bin"))
+			os.Symlink(filepath.Join(jreDir, "lib"), filepath.Join(javaDir, "Contents", "Home", "lib"))
+		}
+		jrePath = filepath.Join(baseDir, "java", "Contents", "Home", "bin", "java")
+	case "windows":
+		jrePath = filepath.Join(jreDir, "bin", "java.exe")
+	default:
+		jrePath = filepath.Join(jreDir, "bin", "java")
+	}
+
+	if _, err := os.Stat(jrePath); err != nil {
+		return fmt.Errorf("Java not found at %s: %w", jrePath, err)
+	}
+
+	fmt.Printf("=== LAUNCH INSTANCE ===\n")
+	fmt.Printf("Branch: %s, Version: %d\n", branch, version)
+	fmt.Printf("Game dir: %s\n", gameDir)
+	fmt.Printf("UserData: %s\n", userDataDir)
+	fmt.Printf("========================\n")
+
+	var cmd *exec.Cmd
+	if runtime.GOOS == "darwin" {
+		appBundlePath := filepath.Join(gameDir, "Client", "Hytale.app")
+		cmd = exec.Command("open", appBundlePath, 
+			"--args",
+			"--app-dir", gameDir,
+			"--user-dir", userDataDir,
+			"--java-exec", jrePath,
+			"--auth-mode", "offline",
+			"--uuid", "00000000-1337-1337-1337-000000000000",
+			"--name", playerName,
+		)
+	} else if runtime.GOOS == "windows" {
+		cmd = exec.Command(clientPath,
+			"--app-dir", gameDir,
+			"--user-dir", userDataDir,
+			"--java-exec", jrePath,
+			"--auth-mode", "offline",
+			"--uuid", "00000000-1337-1337-1337-000000000000",
+			"--name", playerName,
+		)
+		cmd.SysProcAttr = getWindowsSysProcAttr()
+	} else {
+		clientDir := filepath.Join(gameDir, "Client")
+		cmd = exec.Command(clientPath,
+			"--app-dir", gameDir,
+			"--user-dir", userDataDir,
+			"--java-exec", jrePath,
+			"--auth-mode", "offline",
+			"--uuid", "00000000-1337-1337-1337-000000000000",
+			"--name", playerName,
+		)
+		cmd.Env = append(os.Environ(), fmt.Sprintf("LD_LIBRARY_PATH=%s:%s", clientDir, os.Getenv("LD_LIBRARY_PATH")))
+	}
+	
+	cmd.Dir = baseDir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start game: %w", err)
+	}
+
+	gameProcess = cmd.Process
+	gameRunning = true
+	
+	go func() {
+		cmd.Wait()
+		gameProcess = nil
+		gameRunning = false
+	}()
+
+	return nil
+}
+
 var gameProcess *os.Process
 var gameRunning bool
 
@@ -228,7 +342,9 @@ func KillGame() error {
 	if runtime.GOOS == "darwin" {
 		exec.Command("pkill", "-f", "Hytale").Run()
 	} else if runtime.GOOS == "windows" {
-		exec.Command("taskkill", "/F", "/IM", "HytaleClient.exe").Run()
+		cmd := exec.Command("taskkill", "/F", "/IM", "HytaleClient.exe")
+		cmd.SysProcAttr = getWindowsSysProcAttr()
+		cmd.Run()
 	} else {
 		exec.Command("pkill", "-f", "HytaleClient").Run()
 	}
@@ -249,8 +365,10 @@ func IsGameRunning() bool {
 		out, err := exec.Command("pgrep", "-f", "Hytale").Output()
 		isRunning = err == nil && len(out) > 0
 	} else if runtime.GOOS == "windows" {
-		// Check for HytaleClient.exe on Windows
-		out, err := exec.Command("tasklist", "/FI", "IMAGENAME eq HytaleClient.exe", "/FO", "CSV", "/NH").Output()
+		// Check for HytaleClient.exe on Windows - hide the console window
+		cmd := exec.Command("tasklist", "/FI", "IMAGENAME eq HytaleClient.exe", "/FO", "CSV", "/NH")
+		cmd.SysProcAttr = getWindowsSysProcAttr()
+		out, err := cmd.Output()
 		isRunning = err == nil && strings.Contains(string(out), "HytaleClient.exe")
 	} else {
 		// Linux

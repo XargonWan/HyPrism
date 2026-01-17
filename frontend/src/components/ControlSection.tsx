@@ -1,14 +1,24 @@
-import React from 'react';
-import { FolderOpen, Trash, Play, Package, Square } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { FolderOpen, Play, Package, Square, Github, Bug, GitBranch, Loader2, Download, ChevronDown, Check } from 'lucide-react';
+import { BrowserOpenURL } from '../../wailsjs/runtime/runtime';
 
 interface ControlSectionProps {
   onPlay: () => void;
+  onDownload?: () => void;
   onExit?: () => void;
   isDownloading: boolean;
   isGameRunning: boolean;
+  isVersionInstalled: boolean;
   progress: number;
   downloaded: number;
   total: number;
+  currentBranch: string;
+  currentVersion: number;
+  availableVersions: number[];
+  isLoadingVersions?: boolean;
+  isCheckingInstalled?: boolean;
+  onBranchChange: (branch: string) => void;
+  onVersionChange: (version: number) => void;
   actions: {
     openFolder: () => void;
     showDelete: () => void;
@@ -24,7 +34,7 @@ const NavBtn: React.FC<{ onClick?: () => void; icon: React.ReactNode; tooltip?: 
   >
     {icon}
     {tooltip && (
-      <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 text-xs bg-black/90 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+      <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 text-xs bg-black/90 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
         {tooltip}
       </span>
     )}
@@ -41,59 +51,238 @@ const formatBytes = (bytes: number): string => {
 
 export const ControlSection: React.FC<ControlSectionProps> = ({
   onPlay,
+  onDownload,
   onExit,
   isDownloading,
   isGameRunning,
+  isVersionInstalled,
   progress,
   downloaded,
   total,
+  currentBranch,
+  currentVersion,
+  availableVersions,
+  isLoadingVersions,
+  isCheckingInstalled,
+  onBranchChange,
+  onVersionChange,
   actions
 }) => {
+  const [isBranchOpen, setIsBranchOpen] = useState(false);
+  const [isVersionOpen, setIsVersionOpen] = useState(false);
+  const branchDropdownRef = useRef<HTMLDivElement>(null);
+  const versionDropdownRef = useRef<HTMLDivElement>(null);
+
+  const openGitHub = () => BrowserOpenURL('https://github.com/yyyumeniku/HyPrism');
+  const openBugReport = () => BrowserOpenURL('https://github.com/yyyumeniku/HyPrism/issues/new');
+
+  // Close dropdowns on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (branchDropdownRef.current && !branchDropdownRef.current.contains(e.target as Node)) {
+        setIsBranchOpen(false);
+      }
+      if (versionDropdownRef.current && !versionDropdownRef.current.contains(e.target as Node)) {
+        setIsVersionOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Close on escape
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsBranchOpen(false);
+        setIsVersionOpen(false);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
+
+  const handleBranchSelect = (branch: string) => {
+    onBranchChange(branch);
+    setIsBranchOpen(false);
+  };
+
+  const handleVersionSelect = (version: number) => {
+    onVersionChange(version);
+    setIsVersionOpen(false);
+  };
+
+  const branchLabel = currentBranch === 'release' ? 'Release' : 'Pre-Release';
+
+  // Calculate width to match 4 nav buttons (48px each) + 3 gaps (12px each) = 228px
+  const selectorWidth = 'w-[228px]';
+
   return (
-    <div className="flex gap-4">
-      {/* Left side - Navigation buttons */}
-      <div className="flex flex-col gap-3">
-        <div className="flex gap-3">
-          <NavBtn onClick={actions.showModManager} icon={<Package size={20} />} tooltip="Mod Manager" />
-          <NavBtn onClick={actions.openFolder} icon={<FolderOpen size={20} />} tooltip="Open Folder" />
-          <NavBtn onClick={actions.showDelete} icon={<Trash size={20} />} tooltip="Delete Game" />
+    <div className="flex flex-col gap-3">
+      {/* Row 1: Version Selector - spans width of nav buttons below */}
+      <div className={`${selectorWidth} h-12 rounded-xl glass border border-white/5 flex items-center`}>
+        {/* Branch Dropdown (Left side) */}
+        <div ref={branchDropdownRef} className="relative h-full flex-1">
+          <button
+            onClick={() => {
+              setIsBranchOpen(!isBranchOpen);
+              setIsVersionOpen(false);
+            }}
+            disabled={isLoadingVersions}
+            className={`
+              h-full w-full px-3
+              flex items-center justify-center gap-2
+              text-white/60 hover:text-white hover:bg-white/10
+              disabled:opacity-50 disabled:cursor-not-allowed
+              active:scale-95 transition-all duration-150 rounded-l-xl
+              ${isBranchOpen ? 'text-white bg-white/10' : ''}
+            `}
+            title="Select Branch"
+          >
+            <GitBranch size={16} className="text-white/80" />
+            <span className="text-sm font-medium">{branchLabel}</span>
+            <ChevronDown 
+              size={12} 
+              className={`text-white/40 transition-transform duration-150 ${isBranchOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+
+          {/* Branch Dropdown Menu (opens up) */}
+          {isBranchOpen && (
+            <div className="absolute bottom-full left-0 mb-2 z-[100] min-w-[140px] bg-[#1a1a1a] backdrop-blur-xl border border-white/10 rounded-xl shadow-xl shadow-black/50 overflow-hidden">
+              {['release', 'pre-release'].map((branch) => (
+                <button
+                  key={branch}
+                  onClick={() => handleBranchSelect(branch)}
+                  className={`w-full px-3 py-2 flex items-center gap-2 text-sm ${
+                    currentBranch === branch 
+                      ? 'bg-white/20 text-white' 
+                      : 'text-white/70 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  {currentBranch === branch && <Check size={12} className="text-white" />}
+                  <span className={currentBranch === branch ? '' : 'ml-5'}>{branch === 'release' ? 'Release' : 'Pre-Release'}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
+
+        {/* Version Dropdown (Right side) */}
+        <div ref={versionDropdownRef} className="relative h-full flex-1">
+          <button
+            onClick={() => {
+              setIsVersionOpen(!isVersionOpen);
+              setIsBranchOpen(false);
+            }}
+            disabled={isLoadingVersions}
+            className={`
+              h-full w-full px-3
+              flex items-center justify-center gap-2
+              text-white/60 hover:text-[#FFA845] hover:bg-[#FFA845]/10
+              disabled:opacity-50 disabled:cursor-not-allowed
+              active:scale-95 transition-all duration-150 rounded-r-xl
+              ${isVersionOpen ? 'text-[#FFA845] bg-[#FFA845]/10' : ''}
+            `}
+            title="Select Version"
+          >
+            <span className="text-sm font-medium">
+              {isLoadingVersions ? '...' : `v${currentVersion}`}
+            </span>
+            <ChevronDown 
+              size={12} 
+              className={`text-white/40 transition-transform duration-150 ${isVersionOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+
+          {/* Version Dropdown Menu (opens up) */}
+          {isVersionOpen && (
+            <div className="absolute bottom-full right-0 mb-2 z-[100] min-w-[100px] max-h-60 overflow-y-auto bg-[#1a1a1a] backdrop-blur-xl border border-white/10 rounded-xl shadow-xl shadow-black/50">
+              {availableVersions.length > 0 ? (
+                availableVersions.map((version) => (
+                  <button
+                    key={version}
+                    onClick={() => handleVersionSelect(version)}
+                    className={`w-full px-3 py-2 flex items-center gap-2 text-sm ${
+                      currentVersion === version 
+                        ? 'bg-[#FFA845]/20 text-[#FFA845]' 
+                        : 'text-white/70 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    {currentVersion === version && <Check size={12} className="text-[#FFA845]" />}
+                    <span className={currentVersion === version ? '' : 'ml-5'}>v{version}</span>
+                  </button>
+                ))
+              ) : (
+                <div className="px-3 py-2 text-sm text-white/40">No versions</div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Row 2: Nav buttons */}
+      <div className="flex gap-3 items-center">
+        <NavBtn onClick={actions.showModManager} icon={<Package size={20} />} tooltip="Mod Manager" />
+        <NavBtn onClick={actions.openFolder} icon={<FolderOpen size={20} />} tooltip="Open Folder" />
+        <NavBtn onClick={openGitHub} icon={<Github size={20} />} tooltip="GitHub" />
+        <NavBtn onClick={openBugReport} icon={<Bug size={20} />} tooltip="Report Bug" />
         
-        {/* Play/Exit button */}
-        <div className="flex gap-3">
+        {/* Spacer + Disclaimer in center */}
+        <div className="flex-1 flex justify-center">
+          <p className="text-white/40 text-xs whitespace-nowrap">
+            Educational only. Like it? <button onClick={() => BrowserOpenURL('https://hytale.com')} className="text-[#FFA845] font-semibold hover:underline cursor-pointer">BUY IT</button>
+          </p>
+        </div>
+
+        {/* Play/Download button on right - Fixed width container */}
+        <div className="w-[200px] flex justify-end">
           {isGameRunning ? (
             <button
               onClick={onExit}
-              className="flex-1 h-24 rounded-2xl font-black text-4xl tracking-tight flex items-center justify-center gap-4 bg-gradient-to-r from-red-600 to-red-500 text-white hover:shadow-lg hover:shadow-red-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all duration-150 cursor-pointer"
+              className="h-12 px-8 rounded-xl font-black text-xl tracking-tight flex items-center justify-center gap-2 bg-gradient-to-r from-red-600 to-red-500 text-white hover:shadow-lg hover:shadow-red-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all duration-150 cursor-pointer"
             >
-              <Square size={32} fill="currentColor" />
+              <Square size={20} fill="currentColor" />
               <span>EXIT</span>
             </button>
           ) : isDownloading ? (
-            <div className="flex-1 h-24 rounded-2xl bg-[#151515] border border-white/10 flex flex-col items-center justify-center gap-2 px-6 relative overflow-hidden">
-              {/* Progress bar background */}
+            <div className="h-12 px-6 rounded-xl bg-[#151515] border border-white/10 flex items-center justify-center gap-4 relative overflow-hidden min-w-[200px]">
               <div 
                 className="absolute inset-0 bg-gradient-to-r from-[#FFA845]/30 to-[#FF6B35]/30 transition-all duration-300"
                 style={{ width: `${Math.min(progress, 100)}%` }}
               />
-              
-              {/* Content */}
-              <div className="relative z-10 flex flex-col items-center">
-                <span className="text-2xl font-bold text-white">{Math.round(progress)}%</span>
+              <div className="relative z-10 flex items-center gap-3">
+                <span className="text-lg font-bold text-white">{Math.round(progress)}%</span>
                 {total > 0 && (
-                  <span className="text-sm text-gray-400">
+                  <span className="text-xs text-gray-400">
                     {formatBytes(downloaded)} / {formatBytes(total)}
                   </span>
                 )}
               </div>
             </div>
-          ) : (
+          ) : isCheckingInstalled ? (
+            <button
+              disabled
+              className="h-12 px-8 rounded-xl font-black text-xl tracking-tight flex items-center justify-center gap-2 bg-white/10 text-white/50 cursor-not-allowed"
+            >
+              <Loader2 size={20} className="animate-spin" />
+              <span>CHECKING...</span>
+            </button>
+          ) : isVersionInstalled ? (
             <button
               onClick={onPlay}
-              className="flex-1 h-24 rounded-2xl font-black text-4xl tracking-tight flex items-center justify-center gap-4 bg-gradient-to-r from-[#FFA845] to-[#FF6B35] text-white hover:shadow-lg hover:shadow-[#FFA845]/25 hover:scale-[1.02] active:scale-[0.98] transition-all duration-150 cursor-pointer"
+              className="h-12 px-8 rounded-xl font-black text-xl tracking-tight flex items-center justify-center gap-2 bg-gradient-to-r from-[#FFA845] to-[#FF6B35] text-white hover:shadow-lg hover:shadow-[#FFA845]/25 hover:scale-[1.02] active:scale-[0.98] transition-all duration-150 cursor-pointer"
             >
-              <Play size={32} fill="currentColor" />
+              <Play size={20} fill="currentColor" />
               <span>PLAY</span>
+            </button>
+          ) : (
+            <button
+              onClick={onDownload}
+              className="h-12 px-8 rounded-xl font-black text-xl tracking-tight flex items-center justify-center gap-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:shadow-lg hover:shadow-green-500/25 hover:scale-[1.02] active:scale-[0.98] transition-all duration-150 cursor-pointer"
+            >
+              <Download size={20} />
+              <span>DOWNLOAD</span>
             </button>
           )}
         </div>
