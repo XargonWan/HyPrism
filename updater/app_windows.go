@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 )
 
 // Apply applies a launcher update on Windows
@@ -36,9 +35,6 @@ exit
 	}
 
 	cmd := exec.Command("cmd.exe", "/C", scriptPath)
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CreationFlags: syscall.CREATE_NO_WINDOW,
-	}
 	util.HideConsoleWindow(cmd)
 
 	if err := cmd.Start(); err != nil {

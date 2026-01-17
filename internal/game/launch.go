@@ -192,66 +192,98 @@ export LD_LIBRARY_PATH="%s:$LD_LIBRARY_PATH"
 
 	// Store the process for later termination
 	gameProcess = cmd.Process
+	gameRunning = true
 	
 	// Let the process run independently
 	go func() {
 		cmd.Wait()
 		gameProcess = nil
+		// Don't set gameRunning = false here, let IsGameRunning check the actual process
 	}()
 
 	return nil
 }
 
 var gameProcess *os.Process
+var gameRunning bool
 
 // KillGame terminates the running game process
 func KillGame() error {
-	if gameProcess == nil {
+	if !gameRunning {
 		return fmt.Errorf("no game process running")
 	}
 	
-	err := gameProcess.Kill()
-	if err != nil {
-		return fmt.Errorf("failed to kill game process: %w", err)
+	// Try to kill by process reference first
+	if gameProcess != nil {
+		err := gameProcess.Kill()
+		if err == nil {
+			gameProcess = nil
+			gameRunning = false
+			fmt.Println("Game process terminated")
+			return nil
+		}
+	}
+	
+	// If that fails, try to find and kill by name
+	if runtime.GOOS == "darwin" {
+		exec.Command("pkill", "-f", "Hytale").Run()
+	} else if runtime.GOOS == "windows" {
+		exec.Command("taskkill", "/F", "/IM", "HytaleClient.exe").Run()
+	} else {
+		exec.Command("pkill", "-f", "HytaleClient").Run()
 	}
 	
 	gameProcess = nil
+	gameRunning = false
 	fmt.Println("Game process terminated")
 	return nil
 }
 
 // IsGameRunning checks if the game process is still running
 func IsGameRunning() bool {
-	if gameProcess == nil {
+	if !gameRunning {
 		return false
 	}
 	
-	// Check if process is still alive by sending signal 0
-	process, err := os.FindProcess(gameProcess.Pid)
-	if err != nil {
+	// Check if the actual game process is running by looking for the process
+	var isRunning bool
+	
+	if runtime.GOOS == "darwin" {
+		// On macOS, check using pgrep for the Hytale app
+		out, _ := exec.Command("pgrep", "-f", "Hytale.app/Contents/MacOS").Output()
+		isRunning = len(out) > 0
+	} else if runtime.GOOS == "windows" {
+		// On Windows, check using tasklist
+		out, _ := exec.Command("tasklist", "/FI", "IMAGENAME eq HytaleClient.exe").Output()
+		isRunning = strings.Contains(string(out), "HytaleClient.exe")
+	} else {
+		// On Linux, check using pgrep
+		out, _ := exec.Command("pgrep", "-f", "HytaleClient").Output()
+		isRunning = len(out) > 0
+	}
+	
+	if !isRunning {
 		gameProcess = nil
-		return false
+		gameRunning = false
 	}
 	
-	// On Unix, Signal(0) checks if process exists
-	err = process.Signal(os.Signal(nil))
-	if err != nil {
-		gameProcess = nil
-		return false
-	}
-	
-	return true
+	return isRunning
 }
 
 // WaitForGameExit waits for the game to exit and returns
 func WaitForGameExit() {
-	if gameProcess == nil {
+	if !gameRunning {
 		return
 	}
 	
-	// Wait for the process to exit
-	gameProcess.Wait()
+	// Poll until the game is no longer running
+	for IsGameRunning() {
+		// Sleep briefly to avoid busy-waiting
+		// The IsGameRunning function already checks the actual process
+	}
+	
 	gameProcess = nil
+	gameRunning = false
 }
 
 // GetGameLogs returns the game log file content
