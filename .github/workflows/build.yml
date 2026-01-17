@@ -58,19 +58,33 @@ jobs:
           # Install create-dmg
           brew install create-dmg
           
-          # Create a helper script
-          cat > build/bin/Remove-Quarantine.command << 'HELPER'
+          # Create a clean directory for DMG contents
+          mkdir -p dmg-contents
+          
+          # Move only the .app bundle to dmg-contents
+          mv build/bin/HyPrism.app dmg-contents/
+          
+          # Create a helper script to remove quarantine
+          cat > dmg-contents/Remove-Quarantine.command << 'HELPER'
           #!/bin/bash
           cd "$(dirname "$0")"
+          echo ""
+          echo "=== HyPrism Quarantine Remover ==="
+          echo ""
           echo "Removing quarantine attribute from HyPrism.app..."
           xattr -cr HyPrism.app
-          echo "Done! You can now open HyPrism normally."
-          echo "Press any key to close this window..."
+          echo ""
+          echo "✅ Done! You can now open HyPrism normally."
+          echo ""
+          echo "If the app is in /Applications, run instead:"
+          echo "  xattr -cr /Applications/HyPrism.app"
+          echo ""
+          echo "Press any key to close..."
           read -n 1
           HELPER
-          chmod +x build/bin/Remove-Quarantine.command
+          chmod +x dmg-contents/Remove-Quarantine.command
           
-          # Create DMG from .app bundle
+          # Create DMG from clean directory
           create-dmg \
             --volname "HyPrism" \
             --window-pos 200 120 \
@@ -79,11 +93,11 @@ jobs:
             --icon "HyPrism.app" 175 120 \
             --hide-extension "HyPrism.app" \
             --app-drop-link 525 120 \
-            --icon "Remove-Quarantine.command" 350 250 \
+            --icon "Remove-Quarantine.command" 350 280 \
             "HyPrism-macOS-arm64.dmg" \
-            "build/bin"
+            "dmg-contents"
           
-          # Replace .app with DMG
+          # Clean build/bin and put only DMG there
           rm -rf build/bin/*
           mv HyPrism-macOS-arm64.dmg build/bin/
       

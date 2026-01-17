@@ -7,11 +7,44 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"HyPrism/internal/env"
 	"HyPrism/internal/pwr/butler"
 )
+
+// cleanStagingDirectory removes staging directory and any leftover temp files
+// This fixes "Access Denied" errors on Windows where previous installations left locked files
+func cleanStagingDirectory(gameDir string) error {
+	stagingDir := filepath.Join(gameDir, "staging-temp")
+	
+	// Remove staging directory completely
+	if err := os.RemoveAll(stagingDir); err != nil {
+		// On Windows, try to remove files individually if directory removal fails
+		if runtime.GOOS == "windows" {
+			filepath.Walk(stagingDir, func(path string, info os.FileInfo, err error) error {
+				if err == nil && !info.IsDir() {
+					os.Remove(path)
+				}
+				return nil
+			})
+			// Try again after individual file removal
+			os.RemoveAll(stagingDir)
+		}
+	}
+	
+	// Also clean any .tmp files in game directory that butler might have left
+	entries, _ := os.ReadDir(gameDir)
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasSuffix(name, ".tmp") || strings.HasPrefix(name, "sf-") {
+			os.Remove(filepath.Join(gameDir, name))
+		}
+	}
+	
+	return nil
+}
 
 // ApplyPWR applies a PWR patch file using Butler (itch.io patching tool)
 // PWR files are NOT regular zip files - they require Butler to extract
@@ -50,6 +83,13 @@ func ApplyPWR(ctx context.Context, pwrFile string, progressCallback func(stage s
 		return fmt.Errorf("butler not found: %w", err)
 	}
 	
+	// IMPORTANT: Clean staging directory BEFORE creating it
+	// This fixes "Access Denied" errors on Windows from leftover files
+	if progressCallback != nil {
+		progressCallback("install", 0, "Preparing installation...", "", "", 0, 0)
+	}
+	cleanStagingDirectory(gameDir)
+	
 	// Create directories
 	if err := os.MkdirAll(gameDir, 0755); err != nil {
 		return fmt.Errorf("failed to create game directory: %w", err)
@@ -59,7 +99,7 @@ func ApplyPWR(ctx context.Context, pwrFile string, progressCallback func(stage s
 	}
 
 	if progressCallback != nil {
-		progressCallback("install", 0, "Installing Hytale...", "", "", 0, 0)
+		progressCallback("install", 5, "Installing Hytale...", "", "", 0, 0)
 	}
 
 	fmt.Printf("Applying PWR patch with Butler: %s\n", pwrFile)
@@ -67,20 +107,42 @@ func ApplyPWR(ctx context.Context, pwrFile string, progressCallback func(stage s
 	fmt.Printf("Game directory: %s\n", gameDir)
 	
 	// Run butler apply with staging directory (like Hytale-F2P does)
-	cmd := exec.CommandContext(ctx, butlerPath, "apply", "--staging-dir", stagingDir, pwrFile, gameDir)
+	// Add --no-save-interval to avoid checkpoint file issues on Windows
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		// On Windows, disable save interval to avoid checkpoint rename issues
+		cmd = exec.CommandContext(ctx, butlerPath, "apply", "--staging-dir", stagingDir, "--no-save-interval", pwrFile, gameDir)
+	} else {
+		cmd = exec.CommandContext(ctx, butlerPath, "apply", "--staging-dir", stagingDir, pwrFile, gameDir)
+	}
 	
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		fmt.Printf("Butler error output: %s\n", string(output))
-		return fmt.Errorf("butler apply failed: %w\nOutput: %s", err, string(output))
+		
+		// If it failed, try to clean up and provide helpful message
+		cleanStagingDirectory(gameDir)
+		
+		errMsg := string(output)
+		if strings.Contains(errMsg, "Acceso denegado") || strings.Contains(errMsg, "Access denied") || strings.Contains(errMsg, "access is denied") {
+			return fmt.Errorf("installation failed: file access denied\n\n"+
+				"This usually happens when:\n"+
+				"• The game is currently running - please close it\n"+
+				"• Antivirus is blocking the installation - try disabling it temporarily\n"+
+				"• Previous installation was interrupted - restart the launcher\n\n"+
+				"Try: Close the launcher, delete the folder:\n"+
+				"%%LOCALAPPDATA%%\\HyPrism\\release\\package\\game\\latest\n"+
+				"Then restart the launcher.\n\n"+
+				"Technical: %w\nOutput: %s", err, errMsg)
+		}
+		
+		return fmt.Errorf("butler apply failed: %w\nOutput: %s", err, errMsg)
 	}
 
 	fmt.Printf("Butler output: %s\n", string(output))
 
 	// Clean up staging directory
-	if err := os.RemoveAll(stagingDir); err != nil {
-		fmt.Printf("Warning: failed to clean staging dir: %v\n", err)
-	}
+	cleanStagingDirectory(gameDir)
 
 	// Clean up patch file
 	go func() {
