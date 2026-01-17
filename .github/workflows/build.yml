@@ -251,31 +251,39 @@ jobs:
           cd ../../..
           mv HyPrism-linux-x86_64.tar.gz build/bin/
 
-      - name: Prepare Flatpak files (Linux)
+      - name: Build Flatpak (Linux)
         if: matrix.platform == 'linux'
-        continue-on-error: true
         run: |
-          # Prepare all files in the flatpak directory
+          # Install Flatpak and flatpak-builder
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          
+          # Add Flathub remote
+          sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          
+          # Install required runtime
+          sudo flatpak install -y --noninteractive flathub org.gnome.Platform//46 org.gnome.Sdk//46
+          
+          # Prepare all files in the flatpak directory where the manifest expects them
           cp /tmp/HyPrism-binary flatpak/HyPrism
           chmod +x flatpak/HyPrism
           cp build/appicon.png flatpak/dev.hyprism.HyPrism.png
-
-      - name: Build Flatpak (Linux)
-        if: matrix.platform == 'linux'
-        continue-on-error: true
-        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
-        with:
-          bundle: HyPrism.flatpak
-          manifest-path: flatpak/dev.hyprism.HyPrism.json
-          cache-key: flatpak-builder-${{ github.sha }}
-
-      - name: Move Flatpak to build dir (Linux)
-        if: matrix.platform == 'linux'
-        continue-on-error: true
-        run: |
-          mv HyPrism.flatpak build/bin/ || true
+          
+          # Build the Flatpak from the flatpak directory
+          cd flatpak
+          flatpak-builder \
+            --force-clean \
+            --repo=repo \
+            builddir \
+            dev.hyprism.HyPrism.json
+          
+          # Create bundle
+          flatpak build-bundle repo HyPrism.flatpak dev.hyprism.HyPrism
+          mv HyPrism.flatpak ../build/bin/
+          
           # Clean up generated files
-          rm -f flatpak/HyPrism flatpak/dev.hyprism.HyPrism.png
+          rm -f HyPrism dev.hyprism.HyPrism.png
+          rm -rf repo builddir .flatpak-builder
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
