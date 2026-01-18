@@ -22,8 +22,24 @@ sudo pacman -S flatpak
 ### Install HyPrism
 
 1. Download `HyPrism.flatpak` from [releases](https://github.com/yyyumeniku/HyPrism/releases/latest)
-2. Install: `flatpak install HyPrism.flatpak`
-3. Run: `flatpak run dev.hyprism.HyPrism`
+
+2. **Install the GNOME 44 runtime** (required - contains webkit2gtk-4.0):
+   ```bash
+   flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+   flatpak install flathub org.gnome.Platform//44
+   ```
+
+3. Install HyPrism:
+   ```bash
+   flatpak install HyPrism.flatpak
+   ```
+
+4. Run:
+   ```bash
+   flatpak run dev.hyprism.HyPrism
+   ```
+
+> **Important:** HyPrism requires GNOME Platform 44 because newer GNOME versions (46+) removed webkit2gtk-4.0 which the app depends on.
 
 ## Alternative: AppImage
 
@@ -64,7 +80,40 @@ If AppImage doesn't work, use the standalone binary:
 
 ### "libwebkit2gtk-4.0.so.37: cannot open shared object file"
 
-Your system is missing WebKitGTK. Use Flatpak (recommended) or install WebKitGTK.
+Your system is missing WebKitGTK 4.0. This library was deprecated in GNOME 46+.
+
+**For Flatpak users:** Make sure you have the GNOME 44 runtime installed:
+```bash
+flatpak install flathub org.gnome.Platform//44
+```
+
+**For AppImage/binary users:** Install webkit2gtk-4.0 for your distribution (see AppImage section above).
+
+### "libxml2.so.2: cannot open shared object file"
+
+This is a dependency issue. Use the Flatpak version which bundles all dependencies:
+```bash
+flatpak install flathub org.gnome.Platform//44
+flatpak install HyPrism.flatpak
+```
+
+### Arch Linux / GNOME 46+ Issues
+
+Arch Linux and distributions with GNOME 46+ no longer ship webkit2gtk-4.0. Options:
+
+1. **Use Flatpak** (recommended):
+   ```bash
+   flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+   flatpak install flathub org.gnome.Platform//44
+   flatpak install HyPrism.flatpak
+   flatpak run dev.hyprism.HyPrism
+   ```
+
+2. **Install webkit2gtk-4.0 from AUR**:
+   ```bash
+   yay -S webkit2gtk-4.0
+   # Then use AppImage or binary
+   ```
 
 ### AppImage won't launch
 

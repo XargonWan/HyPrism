@@ -198,16 +198,12 @@ jobs:
           APPDATA
           
           # Bundle required WebKit2GTK and ICU libraries for compatibility
-          # NOTE: We do NOT bundle WebKit2GTK libraries as they have too many dependencies
+          # NOTE: We do NOT bundle any libraries as they have complex dependencies
           # that vary between distributions. Users should install webkit2gtk-4.0 from their
           # distribution's package manager, or use the Flatpak version instead.
-          
-          # Only bundle ICU libraries which are more portable
-          for lib in libicui18n.so.70 libicuuc.so.70 libicudata.so.70; do
-            if [ -f "/usr/lib/x86_64-linux-gnu/$lib" ]; then
-              cp "/usr/lib/x86_64-linux-gnu/$lib" HyPrism.AppDir/usr/lib/ 2>/dev/null || true
-            fi
-          done
+          # 
+          # The AppImage is a minimal wrapper - dependencies must be installed system-wide.
+          # For a fully self-contained experience, use the Flatpak version.
           
           # Create AppRun with better environment setup for SteamOS compatibility
           cat > HyPrism.AppDir/AppRun << 'APPRUN'
