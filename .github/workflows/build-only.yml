@@ -211,6 +211,16 @@ jobs:
         run: |
           mkdir -p dmg
           cp -R "artifacts/HyPrism.app" "dmg/HyPrism.app"
+          
+          # Create helper script to clear quarantine
+          cat > "dmg/Open_HyPrism.command" << 'EOF'
+          #!/bin/bash
+          APP="$(dirname "$0")/HyPrism.app"
+          xattr -cr "$APP"
+          open "$APP"
+          EOF
+          chmod +x "dmg/Open_HyPrism.command"
+          
           ln -s /Applications dmg/Applications
           hdiutil create -volname "HyPrism" -srcfolder dmg -ov -format UDZO artifacts/HyPrism-macos-arm64.dmg
 
