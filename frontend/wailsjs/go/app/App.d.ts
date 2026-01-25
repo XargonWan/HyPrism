@@ -122,6 +122,9 @@ export function SetCustomInstanceDir(arg1:string):Promise<void>;
 
 export function SetMusicEnabled(arg1:boolean):Promise<boolean>;
 
+export function GetUUID():Promise<string>;
+
+export function SetUUID(arg1:string):Promise<boolean>;
 export function SetNick(arg1:string):Promise<void>;
 
 export function SetOnlineMode(arg1:boolean):Promise<void>;

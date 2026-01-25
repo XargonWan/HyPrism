@@ -293,6 +293,15 @@ public class AppService : IDisposable
     public string GetNick() => _config.Nick;
     
     public string GetUUID() => _config.UUID;
+
+    public bool SetUUID(string uuid)
+    {
+        if (string.IsNullOrWhiteSpace(uuid)) return false;
+        if (!Guid.TryParse(uuid.Trim(), out var parsed)) return false;
+        _config.UUID = parsed.ToString();
+        SaveConfig();
+        return true;
+    }
     
     public bool SetNick(string nick)
     {
@@ -1595,8 +1604,10 @@ public class AppService : IDisposable
         string userDataDir = Path.Combine(versionPath, "UserData");
         Directory.CreateDirectory(userDataDir);
 
-        // Generate UUID from player name (matching old launcher)
-        string uuid = GenerateOfflineUUID(_config.Nick);
+        // Use saved UUID if available; fallback to offline UUID from name
+        string uuid = string.IsNullOrWhiteSpace(_config.UUID)
+            ? GenerateOfflineUUID(_config.Nick)
+            : _config.UUID;
 
         // On macOS, clear quarantine flags before launching (skip full codesign for speed)
         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))

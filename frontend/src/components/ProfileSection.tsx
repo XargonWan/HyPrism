@@ -5,9 +5,11 @@ import { useTranslation } from 'react-i18next';
 
 interface ProfileSectionProps {
   username: string;
+  uuid: string;
   isEditing: boolean;
   onEditToggle: (editing: boolean) => void;
   onUserChange: (name: string) => void;
+  onUuidChange: (uuid: string) => Promise<boolean> | boolean;
   updateAvailable: boolean;
   onUpdate: () => void;
   launcherVersion: string;
@@ -15,19 +17,27 @@ interface ProfileSectionProps {
 
 export const ProfileSection: React.FC<ProfileSectionProps> = ({
   username,
+  uuid,
   isEditing,
   onEditToggle,
   onUserChange,
+  onUuidChange,
   updateAvailable,
   onUpdate,
   launcherVersion
 }) => {
   const { t } = useTranslation();
   const [editValue, setEditValue] = React.useState(username);
+  const [showUuidEditor, setShowUuidEditor] = React.useState(false);
+  const [uuidValue, setUuidValue] = React.useState(uuid);
 
   React.useEffect(() => {
     setEditValue(username);
   }, [username]);
+
+  React.useEffect(() => {
+    setUuidValue(uuid);
+  }, [uuid]);
 
   const handleSave = () => {
     if (editValue.trim() && editValue.length <= 16) {
@@ -42,6 +52,15 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
     } else if (e.key === 'Escape') {
       setEditValue(username);
       onEditToggle(false);
+    }
+  };
+
+  const handleUuidSave = async () => {
+    const trimmed = uuidValue.trim();
+    if (!trimmed) return;
+    const ok = await onUuidChange(trimmed);
+    if (ok !== false) {
+      setShowUuidEditor(false);
     }
   };
 
@@ -86,6 +105,35 @@ export const ProfileSection: React.FC<ProfileSectionProps> = ({
               <Edit3 size={14} />
             </motion.button>
           </>
+        )}
+      </div>
+
+      {/* UUID editor */}
+      <div className="flex flex-col gap-2">
+        <button
+          className="text-xs text-white/50 hover:text-white/80 transition-colors w-fit"
+          onClick={() => setShowUuidEditor((v) => !v)}
+        >
+          Our secret
+        </button>
+        {showUuidEditor && (
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={uuidValue}
+              onChange={(e) => setUuidValue(e.target.value)}
+              className="bg-[#151515] text-white text-xs px-2 py-1 rounded-lg border border-white/10 focus:border-[#FFA845] outline-none w-[260px]"
+            />
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleUuidSave}
+              className="p-1.5 rounded-lg bg-[#FFA845]/20 text-[#FFA845] hover:bg-[#FFA845]/30"
+              title="Save UUID"
+            >
+              <Check size={14} />
+            </motion.button>
+          </div>
         )}
       </div>
 

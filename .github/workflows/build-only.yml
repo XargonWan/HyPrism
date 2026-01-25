@@ -185,11 +185,28 @@ jobs:
             /p:IncludeNativeLibrariesForSelfExtract=true \
             -o artifacts/osx-arm64
 
+      - name: Debug - List build outputs
+        run: |
+          echo "=== osx-x64 contents ==="
+          ls -la artifacts/osx-x64/ || echo "osx-x64 directory missing"
+          echo "=== osx-arm64 contents ==="
+          ls -la artifacts/osx-arm64/ || echo "osx-arm64 directory missing"
+
       - name: Create macOS app bundles
         run: |
+          set -e  # Exit on any error
+          
           # x64 app bundle
           mkdir -p "artifacts/HyPrism-x64.app/Contents/MacOS"
           mkdir -p "artifacts/HyPrism-x64.app/Contents/Resources"
+          
+          # Check if binary exists before copying
+          if [ ! -f "artifacts/osx-x64/HyPrism" ]; then
+            echo "ERROR: HyPrism binary not found in osx-x64!"
+            ls -la artifacts/osx-x64/
+            exit 1
+          fi
+          
           cp artifacts/osx-x64/HyPrism "artifacts/HyPrism-x64.app/Contents/MacOS/"
           cp artifacts/osx-x64/Photino.Native.dylib "artifacts/HyPrism-x64.app/Contents/MacOS/" || true
           cp -R artifacts/osx-x64/wwwroot "artifacts/HyPrism-x64.app/Contents/Resources/"
@@ -207,6 +224,14 @@ jobs:
           # arm64 app bundle
           mkdir -p "artifacts/HyPrism-arm64.app/Contents/MacOS"
           mkdir -p "artifacts/HyPrism-arm64.app/Contents/Resources"
+          
+          # Check if binary exists before copying
+          if [ ! -f "artifacts/osx-arm64/HyPrism" ]; then
+            echo "ERROR: HyPrism binary not found in osx-arm64!"
+            ls -la artifacts/osx-arm64/
+            exit 1
+          fi
+          
           cp artifacts/osx-arm64/HyPrism "artifacts/HyPrism-arm64.app/Contents/MacOS/"
           cp artifacts/osx-arm64/Photino.Native.dylib "artifacts/HyPrism-arm64.app/Contents/MacOS/" || true
           cp -R artifacts/osx-arm64/wwwroot "artifacts/HyPrism-arm64.app/Contents/Resources/"
@@ -220,6 +245,12 @@ jobs:
           
           # Create PkgInfo
           echo "APPL????" > "artifacts/HyPrism-arm64.app/Contents/PkgInfo"
+          
+          # Verify app bundles
+          echo "=== Verifying x64 app bundle ==="
+          ls -la "artifacts/HyPrism-x64.app/Contents/MacOS/"
+          echo "=== Verifying arm64 app bundle ==="
+          ls -la "artifacts/HyPrism-arm64.app/Contents/MacOS/"
 
       - name: Sign macOS apps (ad-hoc, required after install_name_tool)
         run: |

@@ -16,6 +16,8 @@ import {
   OpenFolder,
   GetNick,
   SetNick,
+  GetUUID,
+  SetUUID,
   DeleteGame,
   Update,
   ExitGame,
@@ -107,6 +109,7 @@ const App: React.FC = () => {
   const { t } = useTranslation();
   // User state
   const [username, setUsername] = useState<string>("HyPrism");
+  const [uuid, setUuid] = useState<string>("");
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [launcherVersion, setLauncherVersion] = useState<string>("dev");
 
@@ -300,6 +303,7 @@ const App: React.FC = () => {
   useEffect(() => {
     // Initialize user settings
     GetNick().then((n: string) => n && setUsername(n));
+    GetUUID().then((u: string) => u && setUuid(u));
     GetLauncherVersion().then((v: string) => setLauncherVersion(v));
     // GetCustomInstanceDir().then((dir: string) => setCustomInstanceDir(dir));
 
@@ -479,6 +483,21 @@ const App: React.FC = () => {
     await SetNick(newNick);
   };
 
+  const handleUuidChange = async (newUuid: string) => {
+    const ok = await SetUUID(newUuid);
+    if (ok) {
+      setUuid(newUuid);
+      return true;
+    }
+    setError({
+      type: 'VALIDATION',
+      message: t('Invalid UUID'),
+      technical: t('Please enter a valid UUID (e.g. 123e4567-e89b-12d3-a456-426614174000).'),
+      timestamp: new Date().toISOString()
+    });
+    return false;
+  };
+
 
   const handleExit = async () => {
     try {
@@ -559,9 +578,11 @@ const App: React.FC = () => {
         <div className="flex justify-between items-start">
           <ProfileSection
             username={username}
+            uuid={uuid}
             isEditing={isEditing}
             onEditToggle={setIsEditing}
             onUserChange={handleNickChange}
+            onUuidChange={handleUuidChange}
             updateAvailable={!!updateAsset}
             onUpdate={handleUpdate}
             launcherVersion={launcherVersion}

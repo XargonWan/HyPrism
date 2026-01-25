@@ -187,6 +187,7 @@ class Program
                         "SetNick" => app.SetNick(GetArg<string>(request.Args, 0)),
                         "GetLauncherVersion" => app.GetLauncherVersion(),
                         "GetUUID" => app.GetUUID(),
+                        "SetUUID" => app.SetUUID(GetArg<string>(request.Args, 0)),
                         
                         // Version Management
                         "GetVersionType" => app.GetVersionType(),

@@ -211,6 +211,10 @@ export function GetUUID() {
     return callBackend('GetUUID');
 }
 
+export function SetUUID(uuid) {
+    return callBackend('SetUUID', uuid);
+}
+
 export function GetOnlineMode() {
     return callBackend('GetOnlineMode');
 }
