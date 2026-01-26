@@ -5,6 +5,10 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- Enable single-file publishing for distribution -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <!-- Windows-specific settings -->
@@ -27,6 +31,7 @@
     <PackageReference Include="System.Text.Json" Version="10.0.2" />
   </ItemGroup>
 
+  <!-- Include wwwroot and jre.json in published output -->
   <ItemGroup>
     <Content Include="wwwroot/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

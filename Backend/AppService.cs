@@ -2712,9 +2712,10 @@ public class AppService : IDisposable
                 return false;
             }
 
-            var downloadsDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
-            Directory.CreateDirectory(downloadsDir);
-            var targetPath = Path.Combine(downloadsDir, assetName);
+            var appDataDir = _appDir;
+            var updatesDir = Path.Combine(appDataDir, "updates");
+            Directory.CreateDirectory(updatesDir);
+            var targetPath = Path.Combine(updatesDir, assetName);
 
             Logger.Info("Update", $"Downloading latest launcher to {targetPath}");
             using (var response = await HttpClient.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead))
@@ -2730,32 +2731,131 @@ public class AppService : IDisposable
                 }
             }
 
-            // Platform-specific post-step
+            Logger.Info("Update", $"Download complete: {targetPath}");
+
+            // Platform-specific installation and restart
             if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                var appPath = "/Applications/HyPrism.app";
-                if (Directory.Exists(appPath))
+                // On macOS, mount DMG and extract app
+                try
                 {
-                    try
+                    Logger.Info("Update", "Mounting DMG and installing...");
+                    var dmgPath = targetPath;
+                    var mountPoint = Path.Combine(updatesDir, "mnt");
+                    Directory.CreateDirectory(mountPoint);
+                    
+                    // Mount DMG
+                    await RunCommandAsync("hdiutil", $"attach \"{dmgPath}\" -mountpoint \"{mountPoint}\"");
+                    
+                    // Copy app to Applications
+                    var appPath = Path.Combine(mountPoint, "HyPrism.app");
+                    var destAppPath = "/Applications/HyPrism.app";
+                    if (Directory.Exists(destAppPath))
                     {
-                        Logger.Warning("Update", "Removing existing /Applications/HyPrism.app");
-                        Directory.Delete(appPath, recursive: true);
+                        Directory.Delete(destAppPath, recursive: true);
                     }
-                    catch (Exception deleteEx)
+                    if (Directory.Exists(appPath))
                     {
-                        Logger.Warning("Update", $"Failed to delete old app: {deleteEx.Message}");
+                        CopyDirectory(appPath, destAppPath);
                     }
+                    
+                    // Unmount DMG
+                    await RunCommandAsync("hdiutil", $"detach \"{mountPoint}\"");
+                    
+                    Logger.Info("Update", "Update installed, restarting launcher...");
+                    // Restart from Applications
+                    Process.Start("open", "-n", "/Applications/HyPrism.app");
+                    Environment.Exit(0);
                 }
-
-                try { Process.Start("open", targetPath); } catch (Exception openEx) { Logger.Warning("Update", $"Could not open DMG: {openEx.Message}"); }
+                catch (Exception ex)
+                {
+                    Logger.Error("Update", $"macOS update failed: {ex.Message}");
+                    BrowserOpenURL(releasesPage);
+                }
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                try { Process.Start("explorer.exe", $"/select,\"{targetPath}\""); } catch (Exception openEx) { Logger.Warning("Update", $"Could not open Explorer: {openEx.Message}"); }
+                // On Windows, extract ZIP and replace current executable
+                try
+                {
+                    Logger.Info("Update", "Extracting and installing update...");
+                    var zipPath = targetPath;
+                    var extractDir = Path.Combine(updatesDir, "extracted");
+                    if (Directory.Exists(extractDir))
+                    {
+                        Directory.Delete(extractDir, recursive: true);
+                    }
+                    Directory.CreateDirectory(extractDir);
+                    
+                    // Extract ZIP
+                    ZipFile.ExtractToDirectory(zipPath, extractDir);
+                    
+                    // Find the .exe in extracted folder
+                    var exeFiles = Directory.GetFiles(extractDir, "*.exe", SearchOption.AllDirectories);
+                    if (exeFiles.Length == 0)
+                    {
+                        throw new Exception("No .exe found in update package");
+                    }
+                    
+                    var newExePath = exeFiles[0];
+                    var currentExePath = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar);
+                    
+                    Logger.Info("Update", $"Current: {currentExePath}, New: {newExePath}");
+                    
+                    // Create batch script to replace and restart
+                    var batchPath = Path.Combine(updatesDir, "update.bat");
+                    var currentExeName = Path.GetFileName(Environment.ProcessPath ?? "HyPrism.exe");
+                    
+                    var batchContent = $@"@echo off
+timeout /t 2 /nobreak
+cd /d ""{extractDir}""
+taskkill /F /IM {currentExeName}
+timeout /t 1 /nobreak
+copy /Y ""{newExePath}"" ""{currentExePath}\{currentExeName}""
+start """" ""{currentExePath}\{currentExeName}""
+";
+                    
+                    File.WriteAllText(batchPath, batchContent);
+                    Logger.Info("Update", "Starting update batch script...");
+                    Process.Start(new ProcessStartInfo(batchPath) { UseShellExecute = true, CreateNoWindow = false });
+                    
+                    // Give batch script time to start
+                    await Task.Delay(500);
+                    Environment.Exit(0);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("Update", $"Windows update failed: {ex.Message}");
+                    BrowserOpenURL(releasesPage);
+                }
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                try { Process.Start("xdg-open", targetPath); } catch (Exception openEx) { Logger.Warning("Update", $"Could not open file manager: {openEx.Message}"); }
+                // On Linux, extract and replace AppImage
+                try
+                {
+                    Logger.Info("Update", "Installing update...");
+                    var appImagePath = targetPath;
+                    var appHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                    var localBinDir = Path.Combine(appHome, ".local", "bin");
+                    Directory.CreateDirectory(localBinDir);
+                    
+                    var currentExeName = Path.GetFileName(Environment.ProcessPath ?? "HyPrism");
+                    var destPath = Path.Combine(localBinDir, currentExeName);
+                    
+                    // Copy and make executable
+                    File.Copy(appImagePath, destPath, overwrite: true);
+                    await RunCommandAsync("chmod", $"+x \"{destPath}\"");
+                    
+                    Logger.Info("Update", "Update installed, restarting launcher...");
+                    Process.Start(destPath);
+                    Environment.Exit(0);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("Update", $"Linux update failed: {ex.Message}");
+                    BrowserOpenURL(releasesPage);
+                }
             }
 
             return true;
@@ -2765,6 +2865,43 @@ public class AppService : IDisposable
             Logger.Error("Update", $"Update failed: {ex.Message}");
             BrowserOpenURL(releasesPage);
             return false;
+        }
+    }
+
+    private async Task RunCommandAsync(string fileName, string arguments)
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = fileName,
+            Arguments = arguments,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(psi);
+        if (process != null)
+        {
+            await process.WaitForExitAsync();
+            if (process.ExitCode != 0)
+            {
+                var error = await process.StandardError.ReadToEndAsync();
+                throw new Exception($"Command failed: {error}");
+            }
+        }
+    }
+
+    private void CopyDirectory(string src, string dst)
+    {
+        Directory.CreateDirectory(dst);
+        foreach (var file in Directory.GetFiles(src))
+        {
+            File.Copy(file, Path.Combine(dst, Path.GetFileName(file)), overwrite: true);
+        }
+        foreach (var dir in Directory.GetDirectories(src))
+        {
+            CopyDirectory(dir, Path.Combine(dst, Path.GetFileName(dir)));
         }
     }
 

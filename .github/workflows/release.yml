@@ -53,15 +53,11 @@ jobs:
         run: |
           dotnet restore
           dotnet publish -c Release -r linux-x64 --self-contained true \
-            /p:PublishSingleFile=true /p:PublishReadyToRun=true \
-            /p:IncludeNativeLibrariesForSelfExtract=true \
             -o artifacts/linux-x64
 
       - name: Build Linux arm64
         run: |
           dotnet publish -c Release -r linux-arm64 --self-contained true \
-            /p:PublishSingleFile=true /p:PublishReadyToRun=true \
-            /p:IncludeNativeLibrariesForSelfExtract=true \
             -o artifacts/linux-arm64
 
       - name: Create tar.gz archives
@@ -143,9 +139,6 @@ jobs:
         run: |
           dotnet restore
           dotnet publish -c Release -r win-x64 --self-contained true `
-            /p:PublishSingleFile=true /p:PublishReadyToRun=true `
-            /p:IncludeNativeLibrariesForSelfExtract=true `
-            /p:OutputType=WinExe /p:ApplicationManifest=app.manifest `
             -o artifacts/win-x64
 
       - name: Create Windows zip
@@ -182,8 +175,6 @@ jobs:
       - name: Build macOS arm64
         run: |
           dotnet publish -c Release -r osx-arm64 --self-contained true \
-            /p:PublishSingleFile=true /p:PublishReadyToRun=true \
-            /p:IncludeNativeLibrariesForSelfExtract=true \
             -o artifacts/osx-arm64
 
       - name: Create macOS app bundle (arm64 only)
