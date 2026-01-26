@@ -202,9 +202,17 @@ jobs:
             exit 1
           fi
           
-          cp artifacts/osx-arm64/HyPrism "artifacts/HyPrism.app/Contents/MacOS/"
-          cp -R artifacts/osx-arm64/wwwroot "artifacts/HyPrism.app/Contents/Resources/"
-          cp artifacts/osx-arm64/jre.json "artifacts/HyPrism.app/Contents/Resources/" || true
+          # Copy ALL files from publish output to MacOS folder (includes all .NET runtime files)
+          cp -R artifacts/osx-arm64/* "artifacts/HyPrism.app/Contents/MacOS/"
+          
+          # Move wwwroot and jre.json to Resources (app expects them in Resources or next to exe)
+          if [ -d "artifacts/HyPrism.app/Contents/MacOS/wwwroot" ]; then
+            cp -R "artifacts/HyPrism.app/Contents/MacOS/wwwroot" "artifacts/HyPrism.app/Contents/Resources/"
+          fi
+          if [ -f "artifacts/HyPrism.app/Contents/MacOS/jre.json" ]; then
+            cp "artifacts/HyPrism.app/Contents/MacOS/jre.json" "artifacts/HyPrism.app/Contents/Resources/"
+          fi
+          
           cp packaging/macos/Info.plist "artifacts/HyPrism.app/Contents/"
           cp packaging/macos/HyPrism.icns "artifacts/HyPrism.app/Contents/Resources/"
           chmod +x "artifacts/HyPrism.app/Contents/MacOS/HyPrism"
