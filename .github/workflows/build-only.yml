@@ -99,6 +99,32 @@ jobs:
           ln -sf usr/share/applications/dev.hyprism.HyPrism.desktop AppDir/HyPrism.desktop || true
           ARCH=x86_64 appimagetool -n AppDir artifacts/HyPrism-linux-x64.AppImage
 
+      - name: Build Flatpak
+        run: |
+          set -e
+          # Prepare bundle from linux-x64 artifacts (place into packaging/flatpak so manifest sources match)
+          rm -rf packaging/flatpak/bundle || true
+          mkdir -p packaging/flatpak/bundle
+          cp -R artifacts/linux-x64/* packaging/flatpak/bundle/ || true
+          cp packaging/flatpak/dev.hyprism.HyPrism.* packaging/flatpak/bundle/ || true
+          chmod +x packaging/flatpak/bundle/HyPrism || true
+
+          # Sanity check: ensure HyPrism binary is present and executable
+          if [ ! -x packaging/flatpak/bundle/HyPrism ]; then
+            echo "ERROR: packaging/flatpak/bundle/HyPrism missing or not executable"
+            ls -la packaging/flatpak/bundle || true
+            exit 1
+          fi
+
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder
+          # Ensure flathub remote available for runtime downloads
+          flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true
+
+          # Build the Flatpak repo and create a single bundle file
+          flatpak-builder --force-clean --repo=repo builddir packaging/flatpak/dev.hyprism.HyPrism.json
+          flatpak build-bundle repo artifacts/HyPrism.flatpak dev.hyprism.HyPrism || true
+
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -109,6 +135,7 @@ jobs:
             artifacts/HyPrism-linux-x64.deb
             artifacts/HyPrism-linux-x64.rpm
             artifacts/HyPrism-linux-x64.AppImage
+            artifacts/HyPrism.flatpak
 
   build-windows:
     runs-on: windows-latest
