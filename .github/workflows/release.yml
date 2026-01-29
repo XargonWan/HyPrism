@@ -362,12 +362,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder || true
 
-          # Configure remotes: flathub and flathub-beta (system preferred, fallback to user)
-          flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true
-          flatpak remote-add --if-not-exists flathub-beta https://flathub.org/repo/flathub.flatpakrepo || flatpak remote-add --if-not-exists flathub-beta https://flathub.org/repo/flathub.flatpakrepo || true
+          # Configure remotes: flathub and flathub-beta
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak remote-add --user --if-not-exists flathub-beta https://flathub.org/beta-repo/flathub-beta.flatpakrepo
 
           # Build with dependencies pulled from flathub and flathub-beta
-          flatpak-builder --force-clean --repo=repo builddir --install-deps-from=flathub --install-deps-from=flathub-beta packaging/flatpak/dev.hyprism.HyPrism.json > flatpak-build.log 2>&1 || true
+          flatpak-builder --user --force-clean --repo=repo builddir --install-deps-from=flathub --install-deps-from=flathub-beta packaging/flatpak/dev.hyprism.HyPrism.json > flatpak-build.log 2>&1 || true
 
           # If repo was created, try to create a bundle
           if [ -d repo ] && [ "$(ls -A repo | wc -c)" -gt 0 ]; then
