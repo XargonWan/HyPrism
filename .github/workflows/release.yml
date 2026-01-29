@@ -10,13 +10,19 @@ on:
         description: 'Version tag (e.g., v2.0.0)'
         required: true
         default: 'v2.0.0'
+      do_release:
+        description: 'Set to true to create the GitHub Release'
+        required: false
+        default: false
+        type: boolean
 
 env:
   DOTNET_VERSION: '8.0.x'
   NODE_VERSION: '20'
 
 jobs:
-  build-linux:
+  build-linux-publish:
+    if: false
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -30,18 +36,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ruby ruby-dev build-essential rpm libfuse2
-          sudo gem install --no-document fpm
-
-      - name: Install appimagetool
-        run: |
-          curl -fsSL -o /tmp/appimagetool "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
-          chmod +x /tmp/appimagetool
-          sudo mv /tmp/appimagetool /usr/local/bin/appimagetool
 
       - name: Build frontend
         run: |
@@ -71,32 +65,134 @@ jobs:
           cd artifacts/linux-x64 && tar -czf ../HyPrism-linux-x64.tar.gz . && cd ../..
           cd artifacts/linux-arm64 && tar -czf ../HyPrism-linux-arm64.tar.gz . && cd ../..
 
-      - name: Create .deb package
-        run: |
-          mkdir -p pkg/opt/hyprism pkg/usr/bin pkg/usr/share/applications pkg/usr/share/icons/hicolor/256x256/apps
-          cp -R artifacts/linux-x64/* pkg/opt/hyprism/
-          chmod +x pkg/opt/hyprism/HyPrism
-          ln -sf /opt/hyprism/HyPrism pkg/usr/bin/hyprism
-          ln -sf /opt/hyprism/HyPrism pkg/usr/bin/HyPrism
-          cp packaging/flatpak/dev.hyprism.HyPrism.desktop pkg/usr/share/applications/ || true
-          cp packaging/flatpak/dev.hyprism.HyPrism.png pkg/usr/share/icons/hicolor/256x256/apps/ || true
-          fpm -s dir -t deb -n hyprism -v ${GITHUB_REF_NAME#v} -C pkg \
-            --description "HyPrism - Hytale Launcher" \
-            --url "https://github.com/HyPrism/HyPrism" \
-            -p artifacts/HyPrism-linux-x64.deb .
+      - name: Upload linux publish artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-publish
+          path: |
+            artifacts/linux-x64/**
+            artifacts/linux-arm64/**
+            artifacts/HyPrism-linux-x64.tar.gz
+            artifacts/HyPrism-linux-arm64.tar.gz
 
-      - name: Create .rpm package
+  build-frontend:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build frontend
         run: |
-          fpm -s dir -t rpm -n hyprism -v ${GITHUB_REF_NAME#v} -C pkg \
-            --description "HyPrism - Hytale Launcher" \
-            --url "https://github.com/HyPrism/HyPrism" \
-            -p artifacts/HyPrism-linux-x64.rpm .
+          cd frontend
+          npm ci
+          npm run build
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+  publish-backend:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore & Publish backend
+        run: |
+          dotnet restore
+          dotnet publish -c Release -r linux-x64 --self-contained true \
+            /p:PublishSingleFile=true /p:PublishReadyToRun=true \
+            /p:IncludeNativeLibrariesForSelfExtract=true /p:IncludeAllContentForSelfExtract=true \
+            -o artifacts/linux-x64
+          dotnet publish -c Release -r linux-arm64 --self-contained true \
+            /p:PublishSingleFile=true /p:PublishReadyToRun=true \
+            /p:IncludeNativeLibrariesForSelfExtract=true /p:IncludeAllContentForSelfExtract=true \
+            -o artifacts/linux-arm64
+
+      - name: Upload backend publish
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-publish
+          path: |
+            artifacts/linux-x64/**
+            artifacts/linux-arm64/**
+
+  assemble-linux-publish:
+    needs: [build-frontend, publish-backend]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download frontend
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend-dist
+
+      - name: Download backend publish
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-publish
+          path: artifacts
+
+      - name: Merge frontend into publish
+        run: |
+          # Copy frontend dist into both linux publish outputs (if present)
+          if [ -d "frontend-dist" ]; then
+            mkdir -p artifacts/linux-x64/wwwroot
+            mkdir -p artifacts/linux-arm64/wwwroot
+            cp -R frontend-dist/* artifacts/linux-x64/wwwroot/ || true
+            cp -R frontend-dist/* artifacts/linux-arm64/wwwroot/ || true
+          fi
+
+      - name: Create tar.gz archives
+        run: |
+          cd artifacts/linux-x64 && tar -czf ../HyPrism-linux-x64.tar.gz . && cd ../..
+          cd artifacts/linux-arm64 && tar -czf ../HyPrism-linux-arm64.tar.gz . && cd ../..
+
+      - name: Upload linux publish
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-publish
+          path: |
+            artifacts/linux-x64/**
+            artifacts/linux-arm64/**
+            artifacts/HyPrism-linux-x64.tar.gz
+            artifacts/HyPrism-linux-arm64.tar.gz
+
+  package-appimage:
+    needs: assemble-linux-publish
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download linux publish
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-publish
+          path: .
+
+      - name: Install appimagetool
+        run: |
+          curl -fsSL -o /tmp/appimagetool "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x /tmp/appimagetool
+          sudo mv /tmp/appimagetool /usr/local/bin/appimagetool
 
       - name: Create AppImage
         run: |
           mkdir -p AppDir/usr/bin AppDir/usr/lib/hyprism AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/256x256/apps
-          cp -R artifacts/linux-x64/* AppDir/usr/lib/hyprism/
-          chmod +x AppDir/usr/lib/hyprism/HyPrism
+          cp -R artifacts/linux-x64/* AppDir/usr/lib/hyprism/ || true
+          chmod +x AppDir/usr/lib/hyprism/HyPrism || true
           ln -sf ../lib/hyprism/HyPrism AppDir/usr/bin/HyPrism
           cp packaging/flatpak/dev.hyprism.HyPrism.desktop AppDir/usr/share/applications/ || true
           cp packaging/flatpak/dev.hyprism.HyPrism.png AppDir/usr/share/icons/hicolor/256x256/apps/ || true
@@ -108,6 +204,24 @@ jobs:
           chmod +x AppDir/AppRun
           ln -sf usr/share/applications/dev.hyprism.HyPrism.desktop AppDir/HyPrism.desktop || true
           ARCH=x86_64 appimagetool -n AppDir artifacts/HyPrism-linux-x64.AppImage
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage
+          path: artifacts/HyPrism-linux-x64.AppImage
+
+  package-flatpak:
+    needs: assemble-linux-publish
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download linux publish
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-publish
+          path: .
 
       - name: Build Flatpak
         run: |
@@ -128,24 +242,61 @@ jobs:
 
           sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder
-          # Ensure flathub remote available for runtime downloads
           flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo || true
 
           # Build the Flatpak repo and create a single bundle file
           flatpak-builder --force-clean --repo=repo builddir packaging/flatpak/dev.hyprism.HyPrism.json
           flatpak build-bundle repo artifacts/HyPrism.flatpak dev.hyprism.HyPrism || true
 
-      - name: Upload Linux artifacts
+      - name: Upload Flatpak artifact
         uses: actions/upload-artifact@v4
         with:
-          name: linux-builds
+          name: flatpak
+          path: artifacts/HyPrism.flatpak
+
+  package-deb-rpm:
+    needs: assemble-linux-publish
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download linux publish
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-publish
+          path: .
+
+      - name: Install packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ruby ruby-dev build-essential rpm
+          sudo gem install --no-document fpm || true
+
+      - name: Create .deb and .rpm
+        run: |
+          mkdir -p pkg/opt/hyprism pkg/usr/bin pkg/usr/share/applications pkg/usr/share/icons/hicolor/256x256/apps
+          cp -R artifacts/linux-x64/* pkg/opt/hyprism/
+          chmod +x pkg/opt/hyprism/HyPrism || true
+          ln -sf /opt/hyprism/HyPrism pkg/usr/bin/hyprism
+          ln -sf /opt/hyprism/HyPrism pkg/usr/bin/HyPrism
+          cp packaging/flatpak/dev.hyprism.HyPrism.desktop pkg/usr/share/applications/ || true
+          cp packaging/flatpak/dev.hyprism.HyPrism.png pkg/usr/share/icons/hicolor/256x256/apps/ || true
+          fpm -s dir -t deb -n hyprism -v ${GITHUB_REF_NAME#v} -C pkg \
+            --description "HyPrism - Hytale Launcher" \
+            --url "https://github.com/HyPrism/HyPrism" \
+            -p artifacts/HyPrism-linux-x64.deb .
+          fpm -s dir -t rpm -n hyprism -v ${GITHUB_REF_NAME#v} -C pkg \
+            --description "HyPrism - Hytale Launcher" \
+            --url "https://github.com/HyPrism/HyPrism" \
+            -p artifacts/HyPrism-linux-x64.rpm .
+
+      - name: Upload deb/rpm artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
           path: |
-            artifacts/HyPrism-linux-x64.tar.gz
-            artifacts/HyPrism-linux-arm64.tar.gz
             artifacts/HyPrism-linux-x64.deb
             artifacts/HyPrism-linux-x64.rpm
-            artifacts/HyPrism-linux-x64.AppImage
-            artifacts/HyPrism.flatpak
 
   build-windows:
     runs-on: windows-latest
@@ -259,7 +410,8 @@ jobs:
           path: artifacts/HyPrism-macos-arm64.dmg
 
   release:
-    needs: [build-linux, build-windows, build-macos]
+    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.do_release == 'true' }}
+    needs: [package-appimage, package-flatpak, package-deb-rpm, build-windows, build-macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -275,8 +427,15 @@ jobs:
 
       - name: Create version.json for auto-updater
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          TAG_NAME="${GITHUB_REF_NAME}"
+          # Determine version/tag (use tag if present, otherwise use workflow_dispatch input)
+          if [ -n "${GITHUB_REF_NAME}" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            TAG_NAME="${GITHUB_REF_NAME}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+            TAG_NAME="${{ github.event.inputs.version }}"
+          fi
+
           cat > release-assets/version.json << EOF
           {
             "version": "$VERSION",
