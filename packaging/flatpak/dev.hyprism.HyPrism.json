@@ -51,8 +51,8 @@
       "sources": [
         {
           "type": "archive",
-          "url": "https://github.com/fanf2/unifdef/archive/refs/tags/unifdef-2.12.tar.gz",
-          "sha256": "030369db9ff917acfae7fa4e90bcc1dff8a8dc534d82d1c72c12ef698d2f20e4"
+          "url": "https://dotat.at/prog/unifdef/unifdef-2.12.tar.gz",
+          "sha256": "fba564a24db7b97ebe9329713ac970627b902e5e9e8b14e19e024eb6e278d10b"
         }
       ]
     },
