@@ -778,10 +778,10 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.ref_name }}
-          name: HyPrism ${{ github.ref_name }}
+          tag_name: ${{ steps.determine_version.outputs.tag_name }}
+          name: HyPrism ${{ steps.determine_version.outputs.tag_name }}
           body: |
-            ## HyPrism ${{ github.ref_name }}
+            ## HyPrism ${{ steps.determine_version.outputs.tag_name }}
 
             ${{ steps.detect_missing.outputs.warning_block }}
             
