@@ -26,7 +26,6 @@ import {
   GetNick,
   SetNick,
   GetUUID,
-  SetUUID,
   DeleteGame,
   Update,
   ExitGame,
@@ -167,7 +166,6 @@ const App: React.FC = () => {
 
   // Game launch tracking
   const gameLaunchTimeRef = useRef<number | null>(null);
-  const LAUNCH_TIMEOUT_MS = 60000; // 1 minute
 
   // Version state
   const [currentBranch, setCurrentBranch] = useState<string>(GameBranch.RELEASE);
@@ -313,26 +311,7 @@ const App: React.FC = () => {
       try {
         const running = await IsGameRunning();
         if (!running) {
-          // Check if we hit the timeout without the game ever running properly
-          const launchTime = gameLaunchTimeRef.current;
-          const elapsed = launchTime ? Date.now() - launchTime : 0;
-          
-          if (elapsed < LAUNCH_TIMEOUT_MS) {
-            // Game stopped before timeout - likely crashed or failed to launch
-            try {
-              const logs = await GetRecentLogs(10);
-              setLaunchTimeoutError({
-                message: t('Game process exited unexpectedly'),
-                logs: logs || []
-              });
-            } catch {
-              setLaunchTimeoutError({
-                message: t('Game process exited unexpectedly'),
-                logs: []
-              });
-            }
-          }
-          
+          // Just update state - error handling is done by game-state event with exit code
           setIsGameRunning(false);
           setProgress(0);
           gameLaunchTimeRef.current = null;
@@ -486,8 +465,26 @@ const App: React.FC = () => {
           console.error('Failed to check close after launch:', err);
         }
       } else if (data.state === 'stopped') {
+        // Only show error if exit code is non-zero (crash/error)
+        // Exit code 0 or undefined = normal exit, null = unknown
+        const exitCode = data.exitCode;
+        if (exitCode !== undefined && exitCode !== null && exitCode !== 0) {
+          try {
+            const logs = await GetRecentLogs(10);
+            setLaunchTimeoutError({
+              message: t('Game crashed with exit code {{code}}', { code: exitCode }),
+              logs: logs || []
+            });
+          } catch {
+            setLaunchTimeoutError({
+              message: t('Game crashed with exit code {{code}}', { code: exitCode }),
+              logs: []
+            });
+          }
+        }
         setIsGameRunning(false);
         setProgress(0);
+        gameLaunchTimeRef.current = null; // Clear launch time to prevent polling error
       }
     });
 
@@ -628,21 +625,6 @@ const App: React.FC = () => {
     await SetNick(newNick);
   };
 
-  const handleUuidChange = async (newUuid: string) => {
-    const ok = await SetUUID(newUuid);
-    if (ok) {
-      setUuid(newUuid);
-      return true;
-    }
-    setError({
-      type: 'VALIDATION',
-      message: t('Invalid UUID'),
-      technical: t('Please enter a valid UUID (e.g. 123e4567-e89b-12d3-a456-426614174000).'),
-      timestamp: new Date().toISOString()
-    });
-    return false;
-  };
-
 
   const handleExit = async () => {
     try {
@@ -751,7 +733,6 @@ const App: React.FC = () => {
             isEditing={isEditing}
             onEditToggle={setIsEditing}
             onUserChange={handleNickChange}
-            onUuidChange={handleUuidChange}
             updateAvailable={!!updateAsset}
             onUpdate={handleUpdate}
             launcherVersion={launcherVersion}

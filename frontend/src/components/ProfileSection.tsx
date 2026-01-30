@@ -1,9 +1,9 @@
 import React, { memo, useCallback, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Edit3, Check, Download, RefreshCw, User } from 'lucide-react';
+import { Edit3, Check, Download, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAccentColor } from '../contexts/AccentColorContext';
-import { GetAuthDomain } from '../../wailsjs/go/app/App';
+import { GetAuthDomain, GetAvatarPreview } from '../../wailsjs/go/app/App';
 
 // Default auth server domain
 const DEFAULT_AUTH_DOMAIN = 'sessions.sanasol.ws';
@@ -14,7 +14,6 @@ interface ProfileSectionProps {
   isEditing: boolean;
   onEditToggle: (editing: boolean) => void;
   onUserChange: (name: string) => void;
-  onUuidChange: (uuid: string) => Promise<boolean> | boolean;
   updateAvailable: boolean;
   onUpdate: () => void;
   launcherVersion: string;
@@ -27,7 +26,6 @@ export const ProfileSection: React.FC<ProfileSectionProps> = memo(({
   isEditing,
   onEditToggle,
   onUserChange,
-  onUuidChange,
   updateAvailable,
   onUpdate,
   launcherVersion,
@@ -36,23 +34,32 @@ export const ProfileSection: React.FC<ProfileSectionProps> = memo(({
   const { t } = useTranslation();
   const { accentColor } = useAccentColor();
   const [editValue, setEditValue] = useState(username);
-  const [showUuidEditor, setShowUuidEditor] = useState(false);
-  const [uuidValue, setUuidValue] = useState(uuid);
   const [authDomain, setAuthDomain] = useState(DEFAULT_AUTH_DOMAIN);
+  const [localAvatar, setLocalAvatar] = useState<string | null>(null);
 
   useEffect(() => {
     setEditValue(username);
   }, [username]);
 
   useEffect(() => {
-    setUuidValue(uuid);
-  }, [uuid]);
-
-  useEffect(() => {
     GetAuthDomain().then(domain => {
       if (domain) setAuthDomain(domain);
     }).catch(() => {});
+    
+    // Try to load local avatar preview
+    GetAvatarPreview().then(avatar => {
+      if (avatar) setLocalAvatar(avatar);
+    }).catch(() => {});
   }, []);
+  
+  // Refresh avatar when uuid changes
+  useEffect(() => {
+    if (uuid) {
+      GetAvatarPreview().then(avatar => {
+        if (avatar) setLocalAvatar(avatar);
+      }).catch(() => {});
+    }
+  }, [uuid]);
 
   const getAvatarHeadUrl = () => {
     return `https://${authDomain}/avatar/${uuid}/head?bg=transparent`;
@@ -72,25 +79,6 @@ export const ProfileSection: React.FC<ProfileSectionProps> = memo(({
       setEditValue(username);
       onEditToggle(false);
     }
-  };
-
-  const handleUuidSave = async () => {
-    const trimmed = uuidValue.trim();
-    if (!trimmed) return;
-    const ok = await onUuidChange(trimmed);
-    if (ok !== false) {
-      setShowUuidEditor(false);
-    }
-  };
-
-  const handleGenerateUuid = () => {
-    // Generate a random UUID v4
-    const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = Math.random() * 16 | 0;
-      const v = c === 'x' ? r : (r & 0x3 | 0x8);
-      return v.toString(16);
-    });
-    setUuidValue(uuid);
   };
 
   return (
@@ -135,7 +123,15 @@ export const ProfileSection: React.FC<ProfileSectionProps> = memo(({
               style={{ borderColor: accentColor }}
               title={t('Edit Profile')}
             >
-              {uuid ? (
+              {localAvatar ? (
+                <img
+                  src={localAvatar}
+                  width="40"
+                  height="40"
+                  className="w-full h-full object-cover"
+                  alt="Player Avatar"
+                />
+              ) : uuid ? (
                 <iframe
                   src={getAvatarHeadUrl()}
                   width="40"
@@ -160,47 +156,6 @@ export const ProfileSection: React.FC<ProfileSectionProps> = memo(({
               <Edit3 size={14} />
             </motion.button>
           </>
-        )}
-      </div>
-
-      {/* UUID editor */}
-      <div className="flex flex-col gap-2">
-        <button
-          className="text-xs text-white/50 hover:text-white/80 transition-colors w-fit"
-          onClick={() => setShowUuidEditor((v) => !v)}
-        >
-          Shh...
-        </button>
-        {showUuidEditor && (
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={uuidValue}
-              onChange={(e) => setUuidValue(e.target.value)}
-              className="bg-[#151515] text-white text-xs px-2 py-1 rounded-lg border border-white/10 outline-none w-[260px]"
-              onFocus={(e) => { e.currentTarget.style.borderColor = accentColor; }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = ''; }}
-            />
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleGenerateUuid}
-              className="p-1.5 rounded-lg bg-white/10 text-white/70 hover:bg-white/20"
-              title="Generate Random UUID"
-            >
-              <RefreshCw size={14} />
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleUuidSave}
-              className="p-1.5 rounded-lg hover:opacity-80"
-              style={{ backgroundColor: `${accentColor}33`, color: accentColor }}
-              title="Save UUID"
-            >
-              <Check size={14} />
-            </motion.button>
-          </div>
         )}
       </div>
 

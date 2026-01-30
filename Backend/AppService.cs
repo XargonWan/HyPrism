@@ -27,6 +27,12 @@ public class AppService : IDisposable
     private CancellationTokenSource? _downloadCts;
     private bool _disposed;
     private PhotinoWindow? _mainWindow;
+    
+    // Skin protection system - saves and restores player skins
+    private Dictionary<string, string> _skinBackups = new();
+    private string? _lastLaunchedVersionPath;
+    private FileSystemWatcher? _skinWatcher;
+    
     private static readonly HttpClient HttpClient = new()
     {
         Timeout = TimeSpan.FromSeconds(30)
@@ -1052,6 +1058,49 @@ public class AppService : IDisposable
     public string GetNick() => _config.Nick;
     
     public string GetUUID() => _config.UUID;
+    
+    /// <summary>
+    /// Gets the avatar preview image as base64 data URL for displaying in the launcher.
+    /// Returns null if no avatar preview exists.
+    /// </summary>
+    public string? GetAvatarPreview()
+    {
+        try
+        {
+            var uuid = _config.UUID;
+            if (string.IsNullOrWhiteSpace(uuid)) return null;
+            
+            // First check the persistent backup in LAUNCHER folder (this survives game updates)
+            var persistentPath = Path.Combine(_appDir, "AvatarBackups", $"{uuid}.png");
+            if (File.Exists(persistentPath) && new FileInfo(persistentPath).Length > 100)
+            {
+                var bytes = File.ReadAllBytes(persistentPath);
+                return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
+            }
+            
+            // Fall back to game cache (may have new edits not yet backed up)
+            var branch = NormalizeVersionType(_config.VersionType);
+            var versionPath = ResolveInstancePath(branch, 0, preferExisting: true);
+            var cachePath = Path.Combine(versionPath, "UserData", "CachedAvatarPreviews", $"{uuid}.png");
+            if (File.Exists(cachePath) && new FileInfo(cachePath).Length > 100)
+            {
+                var bytes = File.ReadAllBytes(cachePath);
+                // Backup to launcher folder for persistence
+                try { 
+                    Directory.CreateDirectory(Path.GetDirectoryName(persistentPath)!); 
+                    File.Copy(cachePath, persistentPath, true); 
+                } catch { }
+                return $"data:image/png;base64,{Convert.ToBase64String(bytes)}";
+            }
+            
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Avatar", $"Could not load avatar preview: {ex.Message}");
+            return null;
+        }
+    }
 
     public string GetCustomInstanceDir() => _config.InstanceDirectory ?? "";
 
@@ -2917,8 +2966,9 @@ public class AppService : IDisposable
         // Patch binary to accept custom auth server tokens
         // The auth domain is "sessions.sanasol.ws" but we need to patch "hytale.com" -> "sanasol.ws"
         // so that sessions.hytale.com becomes sessions.sanasol.ws
+        // NOTE: Patching is needed even in offline/insecure mode because the game still validates domains
         bool enablePatching = true;
-        if (enablePatching && _config.OnlineMode && !string.IsNullOrWhiteSpace(_config.AuthDomain))
+        if (enablePatching && !string.IsNullOrWhiteSpace(_config.AuthDomain))
         {
             try
             {
@@ -2931,7 +2981,23 @@ public class AppService : IDisposable
                 
                 Logger.Info("Game", $"Patching binary: hytale.com -> {baseDomain}");
                 var patcher = new ClientPatcher(baseDomain);
+                
+                // Patch client binary first
                 var patchResult = patcher.EnsureClientPatched(versionPath, (msg, progress) =>
+                {
+                    if (progress.HasValue)
+                    {
+                        Logger.Info("Patcher", $"{msg} ({progress}%)");
+                    }
+                    else
+                    {
+                        Logger.Info("Patcher", msg);
+                    }
+                });
+                
+                // Also patch server JAR (required for singleplayer to work)
+                Logger.Info("Game", $"Patching server JAR: sessions.hytale.com -> sessions.{baseDomain}");
+                var serverPatchResult = patcher.PatchServerJar(versionPath, (msg, progress) =>
                 {
                     if (progress.HasValue)
                     {
@@ -2947,11 +3013,11 @@ public class AppService : IDisposable
                 {
                     if (patchResult.AlreadyPatched)
                     {
-                        Logger.Info("Game", "Binary already patched");
+                        Logger.Info("Game", "Client binary already patched");
                     }
                     else if (patchResult.PatchCount > 0)
                     {
-                        Logger.Success("Game", $"Binary patched successfully ({patchResult.PatchCount} occurrences)");
+                        Logger.Success("Game", $"Client binary patched successfully ({patchResult.PatchCount} occurrences)");
                         
                         // Re-sign the binary after patching (macOS requirement)
                         if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
@@ -2978,13 +3044,35 @@ public class AppService : IDisposable
                     }
                     else
                     {
-                        Logger.Info("Game", "No patches needed - binary uses unknown encoding or already patched");
+                        Logger.Info("Game", "No client patches needed - binary uses unknown encoding or already patched");
                     }
                 }
                 else
                 {
-                    Logger.Warning("Game", $"Binary patching failed: {patchResult.Error}");
+                    Logger.Warning("Game", $"Client binary patching failed: {patchResult.Error}");
                     Logger.Info("Game", "Continuing launch anyway - may not connect to custom auth server");
+                }
+                
+                // Log server JAR patch result
+                if (serverPatchResult.Success)
+                {
+                    if (serverPatchResult.AlreadyPatched)
+                    {
+                        Logger.Info("Game", "Server JAR already patched");
+                    }
+                    else if (serverPatchResult.PatchCount > 0)
+                    {
+                        Logger.Success("Game", $"Server JAR patched successfully ({serverPatchResult.PatchCount} occurrences)");
+                    }
+                    else if (!string.IsNullOrEmpty(serverPatchResult.Warning))
+                    {
+                        Logger.Info("Game", $"Server JAR: {serverPatchResult.Warning}");
+                    }
+                }
+                else
+                {
+                    Logger.Warning("Game", $"Server JAR patching failed: {serverPatchResult.Error}");
+                    Logger.Info("Game", "Singleplayer may not work properly");
                 }
             }
             catch (Exception ex)
@@ -3067,6 +3155,9 @@ public class AppService : IDisposable
         // Create UserData directory
         string userDataDir = Path.Combine(versionPath, "UserData");
         Directory.CreateDirectory(userDataDir);
+
+        // SKIN PROTECTION: Protect skins from server overwrite
+        await ProtectSkinsBeforeLaunch(versionPath);
 
         // Use saved UUID if available; fallback to offline UUID from name and save it
         string uuid;
@@ -3213,18 +3304,393 @@ exec env -i \
         _ = Task.Run(async () =>
         {
             await _gameProcess.WaitForExitAsync();
-            Logger.Info("Game", $"Game process exited with code: {_gameProcess.ExitCode}");
+            var exitCode = _gameProcess.ExitCode;
+            Logger.Info("Game", $"Game process exited with code: {exitCode}");
             _gameProcess = null;
+            
+            // SKIN PROTECTION: Cleanup and ensure skins are preserved
+            CleanupSkinProtection();
             
             // Set Discord presence back to Idle
             _discordService.SetPresence(DiscordService.PresenceState.Idle);
             
-            // Notify frontend that game has exited
-            SendGameStateEvent("stopped");
+            // Notify frontend that game has exited with exit code
+            SendGameStateEvent("stopped", exitCode);
         });
     }
     
-    private void SendGameStateEvent(string state)
+    #region Skin Protection System
+    
+    /// <summary>
+    /// Simple skin persistence:
+    /// 1. ALWAYS delete cache before launch (this forces random skin if no backup)
+    /// 2. If we have a saved skin FOR THIS USER, write it to cache IMMEDIATELY before game starts
+    /// 3. Watch for any edits during gameplay and save them
+    /// 
+    /// Backups are stored in the LAUNCHER data folder (not game UserData) so they persist across game updates.
+    /// IMPORTANT: Only the current user's skin is backed up/restored - not skins from other UUIDs!
+    /// </summary>
+    private Task ProtectSkinsBeforeLaunch(string versionPath)
+    {
+        try
+        {
+            _lastLaunchedVersionPath = versionPath;
+            _skinBackups.Clear();
+            
+            // Get current user's UUID - this is the ONLY skin we care about
+            var currentUuid = _config.UUID;
+            if (string.IsNullOrWhiteSpace(currentUuid))
+            {
+                Logger.Warning("Skin", "No UUID configured - skipping skin protection");
+                return Task.CompletedTask;
+            }
+            var userSkinFile = $"{currentUuid}.json";
+            var userAvatarFile = $"{currentUuid}.png";
+            
+            Logger.Info("Skin", $"Protecting skin for UUID: {currentUuid}");
+            
+            // Game's cache folders
+            var userDataDir = Path.Combine(versionPath, "UserData");
+            var cachedSkinsDir = Path.Combine(userDataDir, "CachedPlayerSkins");
+            var cachedAvatarDir = Path.Combine(userDataDir, "CachedAvatarPreviews");
+            
+            // Persistent backups go in LAUNCHER data folder (survives game updates!)
+            var persistentBackupDir = Path.Combine(_appDir, "SkinBackups");
+            var persistentAvatarBackupDir = Path.Combine(_appDir, "AvatarBackups");
+            
+            Directory.CreateDirectory(persistentBackupDir);
+            Directory.CreateDirectory(persistentAvatarBackupDir);
+            Directory.CreateDirectory(cachedSkinsDir);
+            Directory.CreateDirectory(cachedAvatarDir);
+            
+            // MIGRATION: Move old backups from game folder to launcher folder (one-time)
+            var oldBackupDir = Path.Combine(userDataDir, "PersistentSkinBackups");
+            var oldAvatarBackupDir = Path.Combine(userDataDir, "PersistentAvatarBackups");
+            if (Directory.Exists(oldBackupDir))
+            {
+                Logger.Info("Skin", "Migrating old skin backups to launcher folder...");
+                foreach (var file in Directory.GetFiles(oldBackupDir, "*.json"))
+                {
+                    try
+                    {
+                        var fileName = Path.GetFileName(file);
+                        var newPath = Path.Combine(persistentBackupDir, fileName);
+                        if (!File.Exists(newPath)) File.Move(file, newPath);
+                    }
+                    catch { }
+                }
+                try { Directory.Delete(oldBackupDir, true); } catch { }
+            }
+            if (Directory.Exists(oldAvatarBackupDir))
+            {
+                Logger.Info("Skin", "Migrating old avatar backups to launcher folder...");
+                foreach (var file in Directory.GetFiles(oldAvatarBackupDir, "*.png"))
+                {
+                    try
+                    {
+                        var fileName = Path.GetFileName(file);
+                        var newPath = Path.Combine(persistentAvatarBackupDir, fileName);
+                        if (!File.Exists(newPath)) File.Move(file, newPath);
+                    }
+                    catch { }
+                }
+                try { Directory.Delete(oldAvatarBackupDir, true); } catch { }
+            }
+            
+            // Step 1: Backup current user's skin from cache BEFORE deleting (if valid)
+            var userCacheSkinPath = Path.Combine(cachedSkinsDir, userSkinFile);
+            var userBackupSkinPath = Path.Combine(persistentBackupDir, userSkinFile);
+            if (File.Exists(userCacheSkinPath))
+            {
+                try
+                {
+                    var content = File.ReadAllText(userCacheSkinPath);
+                    if (IsValidSkinData(content))
+                    {
+                        File.WriteAllText(userBackupSkinPath, content);
+                        _skinBackups[userSkinFile] = content;
+                        Logger.Success("Skin", $"Backed up your skin from cache");
+                    }
+                }
+                catch { }
+            }
+            
+            // Backup current user's avatar preview
+            var userCacheAvatarPath = Path.Combine(cachedAvatarDir, userAvatarFile);
+            var userBackupAvatarPath = Path.Combine(persistentAvatarBackupDir, userAvatarFile);
+            if (File.Exists(userCacheAvatarPath))
+            {
+                try
+                {
+                    if (new FileInfo(userCacheAvatarPath).Length > 100)
+                    {
+                        File.Copy(userCacheAvatarPath, userBackupAvatarPath, overwrite: true);
+                        Logger.Info("Skin", $"Backed up your avatar");
+                    }
+                }
+                catch { }
+            }
+            
+            // Step 2: Load your persistent backup (in case cache was empty)
+            if (!_skinBackups.ContainsKey(userSkinFile) && File.Exists(userBackupSkinPath))
+            {
+                try
+                {
+                    var content = File.ReadAllText(userBackupSkinPath);
+                    if (IsValidSkinData(content))
+                    {
+                        _skinBackups[userSkinFile] = content;
+                        Logger.Info("Skin", $"Loaded your saved skin from backup");
+                    }
+                }
+                catch { }
+            }
+            
+            // Step 3: DELETE the cache folders (clears ALL cached skins including from other UUIDs)
+            Logger.Info("Skin", "Clearing cache folders...");
+            try
+            {
+                if (Directory.Exists(cachedSkinsDir))
+                    Directory.Delete(cachedSkinsDir, recursive: true);
+                if (Directory.Exists(cachedAvatarDir))
+                    Directory.Delete(cachedAvatarDir, recursive: true);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning("Skin", $"Could not clear cache: {ex.Message}");
+            }
+            
+            // Recreate folders
+            Directory.CreateDirectory(cachedSkinsDir);
+            Directory.CreateDirectory(cachedAvatarDir);
+            
+            // Step 4: IMMEDIATELY restore ONLY YOUR saved skin (before game even starts!)
+            if (_skinBackups.TryGetValue(userSkinFile, out var savedSkin))
+            {
+                try
+                {
+                    var targetPath = Path.Combine(cachedSkinsDir, userSkinFile);
+                    File.WriteAllText(targetPath, savedSkin);
+                    Logger.Success("Skin", $"✓ Restored your skin to cache");
+                    
+                    // Restore your avatar too if we have it
+                    if (File.Exists(userBackupAvatarPath))
+                    {
+                        File.Copy(userBackupAvatarPath, userCacheAvatarPath, overwrite: true);
+                        Logger.Success("Skin", $"✓ Restored your avatar to cache");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning("Skin", $"Could not restore skin: {ex.Message}");
+                }
+            }
+            else
+            {
+                Logger.Info("Skin", "No saved skin for your UUID - you'll get a fresh random skin!");
+            }
+            
+            // Step 5: Start watcher to save any NEW edits during gameplay
+            StartSkinWatcher(cachedSkinsDir, persistentBackupDir, cachedAvatarDir, persistentAvatarBackupDir);
+            
+            Logger.Success("Skin", "Skin protection active!");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Skin", $"Failed to set up skin protection: {ex.Message}");
+        }
+        
+        return Task.CompletedTask;
+    }
+    
+    private bool IsValidSkinData(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return false;
+        if (content.Length < 100) return false;
+        // Valid skin must have these fields
+        return content.Contains("bodyCharacteristic") && 
+               (content.Contains("haircut") || content.Contains("eyes") || content.Contains("mouth"));
+    }
+    
+    private void StartSkinWatcher(string cachedSkinsDir, string persistentBackupDir, string cachedAvatarDir, string persistentAvatarBackupDir)
+    {
+        try
+        {
+            StopSkinWatcher();
+            
+            _skinWatcher = new FileSystemWatcher(cachedSkinsDir, "*.json")
+            {
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.CreationTime,
+                EnableRaisingEvents = true
+            };
+            
+            _skinWatcher.Changed += OnSkinFileChanged;
+            _skinWatcher.Created += OnSkinFileChanged;
+            
+            Logger.Info("Skin", "Started skin file watcher");
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Skin", $"Could not start skin watcher: {ex.Message}");
+        }
+    }
+    
+    private void StopSkinWatcher()
+    {
+        if (_skinWatcher != null)
+        {
+            _skinWatcher.EnableRaisingEvents = false;
+            _skinWatcher.Dispose();
+            _skinWatcher = null;
+        }
+    }
+    
+    private void OnSkinFileChanged(object sender, FileSystemEventArgs e)
+    {
+        // Run in a separate thread to not block the watcher
+        Task.Run(() => ProcessSkinFileChange(e.FullPath));
+    }
+    
+    private void ProcessSkinFileChange(string filePath)
+    {
+        try
+        {
+            var fileName = Path.GetFileName(filePath);
+            
+            // Only care about the current user's skin file
+            var currentUuid = _config.UUID;
+            if (string.IsNullOrWhiteSpace(currentUuid)) return;
+            var userSkinFile = $"{currentUuid}.json";
+            if (!fileName.Equals(userSkinFile, StringComparison.OrdinalIgnoreCase)) return;
+            
+            // Small delay to let the write complete
+            Thread.Sleep(100);
+            
+            if (!File.Exists(filePath)) return;
+            
+            string content;
+            try
+            {
+                content = File.ReadAllText(filePath);
+            }
+            catch
+            {
+                // File might be locked, retry once
+                Thread.Sleep(150);
+                try { content = File.ReadAllText(filePath); }
+                catch { return; }
+            }
+            
+            // ALWAYS save valid skin data - this is the user's edit!
+            if (IsValidSkinData(content))
+            {
+                // Check if content is actually different
+                if (_skinBackups.TryGetValue(fileName, out var existingBackup) && existingBackup == content)
+                {
+                    return; // Same content, skip
+                }
+                
+                // New valid skin data - save to LAUNCHER folder!
+                _skinBackups[fileName] = content;
+                var persistentPath = Path.Combine(_appDir, "SkinBackups", fileName);
+                try 
+                { 
+                    Directory.CreateDirectory(Path.GetDirectoryName(persistentPath)!);
+                    File.WriteAllText(persistentPath, content); 
+                    Logger.Success("Skin", $"✓ SAVED! New skin edit: {fileName}");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning("Skin", $"Could not persist backup: {ex.Message}");
+                }
+                
+                // Also backup avatar if it exists
+                try
+                {
+                    var uuid = Path.GetFileNameWithoutExtension(fileName);
+                    var avatarCachePath = Path.Combine(Path.GetDirectoryName(filePath)!, "..", "CachedAvatarPreviews", $"{uuid}.png");
+                    if (File.Exists(avatarCachePath) && new FileInfo(avatarCachePath).Length > 100)
+                    {
+                        var avatarBackupPath = Path.Combine(_appDir, "AvatarBackups", $"{uuid}.png");
+                        Directory.CreateDirectory(Path.GetDirectoryName(avatarBackupPath)!);
+                        File.Copy(avatarCachePath, avatarBackupPath, overwrite: true);
+                    }
+                }
+                catch { }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Skin", $"Error processing skin change: {ex.Message}");
+        }
+    }
+    
+    private void CleanupSkinProtection()
+    {
+        try
+        {
+            // Stop the watcher
+            StopSkinWatcher();
+            
+            if (string.IsNullOrEmpty(_lastLaunchedVersionPath)) return;
+            
+            // Get current user's UUID - only backup THEIR skin
+            var currentUuid = _config.UUID;
+            if (string.IsNullOrWhiteSpace(currentUuid)) return;
+            
+            var userSkinFile = $"{currentUuid}.json";
+            var userAvatarFile = $"{currentUuid}.png";
+            
+            var cachedSkinsDir = Path.Combine(_lastLaunchedVersionPath, "UserData", "CachedPlayerSkins");
+            var cachedAvatarDir = Path.Combine(_lastLaunchedVersionPath, "UserData", "CachedAvatarPreviews");
+            
+            // Persistent backups go in LAUNCHER folder
+            var persistentBackupDir = Path.Combine(_appDir, "SkinBackups");
+            var persistentAvatarBackupDir = Path.Combine(_appDir, "AvatarBackups");
+            
+            Directory.CreateDirectory(persistentBackupDir);
+            Directory.CreateDirectory(persistentAvatarBackupDir);
+            
+            // Final backup pass - save ONLY the current user's skin
+            var userCacheSkinPath = Path.Combine(cachedSkinsDir, userSkinFile);
+            if (File.Exists(userCacheSkinPath))
+            {
+                try
+                {
+                    var content = File.ReadAllText(userCacheSkinPath);
+                    if (IsValidSkinData(content))
+                    {
+                        _skinBackups[userSkinFile] = content;
+                        File.WriteAllText(Path.Combine(persistentBackupDir, userSkinFile), content);
+                        Logger.Success("Skin", $"✓ Final backup saved for your skin");
+                    }
+                }
+                catch { }
+            }
+            
+            // Also backup current user's avatar preview
+            var userCacheAvatarPath = Path.Combine(cachedAvatarDir, userAvatarFile);
+            if (File.Exists(userCacheAvatarPath))
+            {
+                try
+                {
+                    File.Copy(userCacheAvatarPath, Path.Combine(persistentAvatarBackupDir, userAvatarFile), overwrite: true);
+                    Logger.Info("Skin", $"Backed up your avatar preview");
+                }
+                catch { }
+            }
+            
+            Logger.Info("Skin", "Skin protection cleanup complete - your edits are saved!");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Skin", $"Error in skin cleanup: {ex.Message}");
+        }
+    }
+    
+    #endregion
+
+    private void SendGameStateEvent(string state, int? exitCode = null)
     {
         if (_mainWindow == null) return;
         
@@ -3234,7 +3700,7 @@ exec env -i \
             {
                 type = "event",
                 eventName = "game-state",
-                data = new { state }
+                data = new { state, exitCode }
             };
             _mainWindow.SendWebMessage(JsonSerializer.Serialize(eventData, JsonOptions));
         }

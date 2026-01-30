@@ -83,6 +83,8 @@ export function GetNews(arg1:number):Promise<Array<news.NewsItem>>;
 
 export function GetNick():Promise<string>;
 
+export function GetAvatarPreview():Promise<string|null>;
+
 export function GetOnlineMode():Promise<boolean>;
 
 export function GetPlatformInfo():Promise<Record<string, string>>;

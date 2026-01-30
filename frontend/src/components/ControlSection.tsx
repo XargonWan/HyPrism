@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { FolderOpen, Play, Package, Square, Settings, Loader2, Download, ChevronDown, Check, X, GitBranch } from 'lucide-react';
 import { CoffeeIcon } from './CoffeeIcon';
 import { OnlineToggle } from './OnlineToggle';
+import { LanguageSelector } from './LanguageSelector';
 import { BrowserOpenURL } from '../../wailsjs/runtime/runtime';
 import { GameBranch } from '../constants/enums';
 import { useAccentColor } from '../contexts/AccentColorContext';
@@ -279,6 +280,11 @@ export const ControlSection: React.FC<ControlSectionProps> = memo(({
         <NavBtn onClick={actions.openFolder} icon={<FolderOpen size={18} />} tooltip={t('Open Instance Folder')} accentColor={accentColor} />
         <NavBtn onClick={onOpenSettings} icon={<Settings size={18} />} tooltip={t('Settings')} accentColor={accentColor} />
         <OnlineToggle accentColor={accentColor} />
+        <LanguageSelector 
+          currentBranch={currentBranch} 
+          currentVersion={currentVersion} 
+          onShowModManager={(query) => actions.showModManager(query)} 
+        />
         <button
           tabIndex={-1}
           onClick={openCoffee}

@@ -231,6 +231,10 @@ export function GetUUID() {
     return callBackend('GetUUID');
 }
 
+export function GetAvatarPreview() {
+    return callBackend('GetAvatarPreview');
+}
+
 export function SetUUID(uuid) {
     return callBackend('SetUUID', uuid);
 }
