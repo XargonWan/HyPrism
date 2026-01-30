@@ -26,60 +26,6 @@ env:
   NODE_VERSION: '20'
 
 jobs:
-  build-linux-publish:
-    if: false
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm ci
-          npm run build
-
-      - name: Build Linux x64
-        run: |
-          dotnet restore
-          dotnet publish ./HyPrism.csproj -c Release -r linux-x64 --self-contained true \
-            /p:PublishSingleFile=true /p:PublishReadyToRun=true \
-            /p:IncludeNativeLibrariesForSelfExtract=true \
-            /p:IncludeAllContentForSelfExtract=true \
-            -o artifacts/linux-x64
-
-      - name: Build Linux arm64
-        run: |
-          dotnet publish ./HyPrism.csproj -c Release -r linux-arm64 --self-contained true \
-            /p:PublishSingleFile=true /p:PublishReadyToRun=true \
-            /p:IncludeNativeLibrariesForSelfExtract=true \
-            /p:IncludeAllContentForSelfExtract=true \
-            -o artifacts/linux-arm64
-
-      - name: Create tar.gz archives
-        run: |
-          cd artifacts/linux-x64 && tar -czf ../HyPrism-linux-x64.tar.gz . && cd ../..
-          cd artifacts/linux-arm64 && tar -czf ../HyPrism-linux-arm64.tar.gz . && cd ../..
-
-      - name: Upload linux publish artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-publish
-          path: |
-            artifacts/linux-x64/**
-            artifacts/linux-arm64/**
-            artifacts/HyPrism-linux-x64.tar.gz
-            artifacts/HyPrism-linux-arm64.tar.gz
-
   generate-linux-bundle:
     runs-on: ubuntu-22.04
     steps:
