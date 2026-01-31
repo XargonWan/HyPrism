@@ -545,6 +545,5 @@ jobs:
             - Updated to support webkit2gtk-4.1
           draft: false
           prerelease: ${{ github.event.inputs.prerelease }}
-          overwrite: true
           files: |
             release-assets/*
