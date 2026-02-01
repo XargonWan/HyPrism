@@ -222,6 +222,9 @@ public class AppService : IDisposable
         public DateTime UpdatedAt { get; set; }  // When the version was last updated (from latest.json)
         public long PlayTimeSeconds { get; set; } = 0;
         public bool IsLatestInstance { get; set; } = false;  // True for "latest" instance, false for specific version instances
+        public bool IsPrerelease { get; set; } = false;  // True if this is a pre-release/beta instance
+        public bool IsRelease { get; set; } = true;  // True if this is a release/stable instance
+        public string Branch { get; set; } = "release";  // The branch name (release, pre-release)
         
         // Helper to format playtime as DD:HH:MM:SS
         public string GetFormattedPlayTime()
@@ -279,12 +282,25 @@ public class AppService : IDisposable
         var info = LoadInstanceInfo(branch, version);
         if (info == null)
         {
+            var normalizedBranch = branch.ToLower();
             info = new InstanceInfo
             {
                 Version = version,
                 CreatedAt = DateTime.UtcNow,
-                PlayTimeSeconds = 0
+                PlayTimeSeconds = 0,
+                Branch = normalizedBranch,
+                IsPrerelease = normalizedBranch == "pre-release",
+                IsRelease = normalizedBranch == "release"
             };
+            SaveInstanceInfo(branch, version, info);
+        }
+        else if (string.IsNullOrEmpty(info.Branch))
+        {
+            // Migrate old instance.json files that don't have Branch info
+            var normalizedBranch = branch.ToLower();
+            info.Branch = normalizedBranch;
+            info.IsPrerelease = normalizedBranch == "pre-release";
+            info.IsRelease = normalizedBranch == "release";
             SaveInstanceInfo(branch, version, info);
         }
     }
@@ -8405,6 +8421,7 @@ rm -f ""$0""
                     Description = modDescription,
                     IconUrl = iconUrl,
                     FileDate = fileInfo.FileDate ?? "",
+                    Categories = modMeta?.Categories?.Select(c => c.Name ?? "").ToList() ?? new List<string>(),
                     Screenshots = screenshots
                 });
                 
@@ -8473,6 +8490,163 @@ rm -f ""$0""
         catch (Exception ex)
         {
             Logger.Error("Mods", $"Failed to uninstall mod: {ex.Message}");
+            return false;
+        }
+    }
+
+    // Optimization mod slugs from CurseForge
+    private static readonly string[] OptimizationModSlugs = new[]
+    {
+        "hyfine",
+        "spark",
+        "chunk-generator",
+        "hyoptimizer",
+        "hyfixes",
+        "zhorik7s-mob-limiter",
+        "mega-optimizer",
+        "server-optimizer"
+    };
+
+    public async Task<bool> InstallOptimizationModsAsync()
+    {
+        try
+        {
+            Logger.Info("Mods", "Installing optimization mods to all profiles...");
+            
+            // Get all profiles
+            var profiles = _config.Profiles ?? new List<Profile>();
+            if (profiles.Count == 0)
+            {
+                Logger.Warning("Mods", "No profiles found, cannot install optimization mods");
+                return false;
+            }
+            
+            int installedCount = 0;
+            
+            foreach (var modSlug in OptimizationModSlugs)
+            {
+                try
+                {
+                    // Search for the mod by slug
+                    var searchUrl = $"{CurseForgeBaseUrl}/mods/search?gameId={HytaleGameId}&slug={modSlug}";
+                    using var searchRequest = new HttpRequestMessage(HttpMethod.Get, searchUrl);
+                    searchRequest.Headers.Add("x-api-key", CurseForgeApiKey);
+                    
+                    using var searchResponse = await HttpClient.SendAsync(searchRequest);
+                    if (!searchResponse.IsSuccessStatusCode)
+                    {
+                        Logger.Warning("Mods", $"Could not find optimization mod: {modSlug}");
+                        continue;
+                    }
+                    
+                    var searchJson = await searchResponse.Content.ReadAsStringAsync();
+                    var cfSearchResponse = JsonSerializer.Deserialize<CurseForgeSearchResponse>(searchJson, JsonOptions);
+                    
+                    var mod = cfSearchResponse?.Data?.FirstOrDefault(m => m.Slug?.ToLower() == modSlug.ToLower());
+                    if (mod == null)
+                    {
+                        Logger.Warning("Mods", $"Mod not found: {modSlug}");
+                        continue;
+                    }
+                    
+                    // Get the latest file
+                    var latestFile = mod.LatestFiles?.OrderByDescending(f => f.FileDate).FirstOrDefault();
+                    if (latestFile == null)
+                    {
+                        Logger.Warning("Mods", $"No files found for mod: {modSlug}");
+                        continue;
+                    }
+                    
+                    // Install to each profile's mods folder
+                    foreach (var profile in profiles)
+                    {
+                        var profileModsPath = GetProfileModsFolder(profile);
+                        Directory.CreateDirectory(profileModsPath);
+                        
+                        // Check if already installed
+                        var manifestPath = Path.Combine(profileModsPath, "manifest.json");
+                        var installedMods = new List<InstalledMod>();
+                        
+                        if (File.Exists(manifestPath))
+                        {
+                            try
+                            {
+                                var manifestJson = File.ReadAllText(manifestPath);
+                                installedMods = JsonSerializer.Deserialize<List<InstalledMod>>(manifestJson, JsonOptions) ?? new List<InstalledMod>();
+                            }
+                            catch { }
+                        }
+                        
+                        // Skip if already installed
+                        if (installedMods.Any(m => m.CurseForgeId == mod.Id.ToString() || m.Slug == modSlug))
+                        {
+                            Logger.Info("Mods", $"Optimization mod {modSlug} already installed in profile {profile.Name}");
+                            continue;
+                        }
+                        
+                        // Download and install
+                        var fileName = latestFile.FileName ?? $"{modSlug}.jar";
+                        var filePath = Path.Combine(profileModsPath, fileName);
+                        
+                        var downloadUrl = latestFile.DownloadUrl;
+                        if (string.IsNullOrEmpty(downloadUrl))
+                        {
+                            // Try to construct download URL
+                            downloadUrl = $"https://edge.forgecdn.net/files/{latestFile.Id / 1000}/{latestFile.Id % 1000}/{fileName}";
+                        }
+                        
+                        Logger.Info("Mods", $"Downloading {modSlug} for profile {profile.Name}...");
+                        
+                        try
+                        {
+                            using var downloadResponse = await HttpClient.GetAsync(downloadUrl);
+                            downloadResponse.EnsureSuccessStatusCode();
+                            
+                            using var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
+                            await downloadResponse.Content.CopyToAsync(fs);
+                            
+                            // Update manifest
+                            installedMods.Add(new InstalledMod
+                            {
+                                Id = $"cf-{mod.Id}",
+                                CurseForgeId = mod.Id.ToString(),
+                                FileId = latestFile.Id.ToString(),
+                                Name = mod.Name ?? modSlug,
+                                FileName = fileName,
+                                Slug = modSlug,
+                                Enabled = true,
+                                Version = latestFile.DisplayName ?? latestFile.FileName ?? "",
+                                Author = mod.Authors?.FirstOrDefault()?.Name ?? "Unknown",
+                                Description = mod.Summary ?? "",
+                                IconUrl = mod.Logo?.ThumbnailUrl ?? "",
+                                FileDate = latestFile.FileDate ?? "",
+                                Categories = mod.Categories?.Select(c => c.Name ?? "").ToList() ?? new List<string>()
+                            });
+                            
+                            var manifestOptions = new JsonSerializerOptions(JsonOptions) { WriteIndented = true };
+                            File.WriteAllText(manifestPath, JsonSerializer.Serialize(installedMods, manifestOptions));
+                            
+                            installedCount++;
+                            Logger.Success("Mods", $"Installed {modSlug} to profile {profile.Name}");
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warning("Mods", $"Failed to download {modSlug} for profile {profile.Name}: {ex.Message}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning("Mods", $"Failed to install optimization mod {modSlug}: {ex.Message}");
+                }
+            }
+            
+            Logger.Success("Mods", $"Installed {installedCount} optimization mods across all profiles");
+            return installedCount > 0;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Mods", $"Failed to install optimization mods: {ex.Message}");
             return false;
         }
     }
@@ -8721,7 +8895,9 @@ rm -f ""$0""
                         HasUserData = Directory.Exists(userDataPath),
                         CreatedAt = instanceInfo?.CreatedAt,
                         PlayTimeSeconds = instanceInfo?.PlayTimeSeconds ?? 0,
-                        PlayTimeFormatted = instanceInfo?.GetFormattedPlayTime() ?? "00:00:00"
+                        PlayTimeFormatted = instanceInfo?.GetFormattedPlayTime() ?? "00:00:00",
+                        IsPrerelease = instanceInfo?.IsPrerelease ?? (branchName == "pre-release"),
+                        IsRelease = instanceInfo?.IsRelease ?? (branchName == "release")
                     });
                 }
                 catch { }
@@ -9990,6 +10166,7 @@ public class InstalledMod
     public string IconUrl { get; set; } = "";
     public string CurseForgeId { get; set; } = "";
     public string FileDate { get; set; } = "";
+    public List<string> Categories { get; set; } = new();
     public List<CurseForgeScreenshot> Screenshots { get; set; } = new();
     /// <summary>
     /// The latest available file ID from CurseForge (for update checking).
@@ -10143,4 +10320,6 @@ public class InstalledVersionInfo
     public DateTime? CreatedAt { get; set; }
     public long PlayTimeSeconds { get; set; }
     public string PlayTimeFormatted { get; set; } = "";
+    public bool IsPrerelease { get; set; } = false;
+    public bool IsRelease { get; set; } = true;
 }

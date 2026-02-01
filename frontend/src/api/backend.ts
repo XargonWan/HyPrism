@@ -189,6 +189,12 @@ export const InstallModFile = (modId: number, fileId: number) => callBackend<voi
 export const InstallModFileToInstance = (modId: string, fileId: string, branch: string, version: number) => callBackend<boolean>('InstallModFileToInstance', modId, fileId, branch, version);
 
 /**
+ * Installs optimization mods to all profiles
+ * @returns True if at least one mod was installed
+ */
+export const InstallOptimizationMods = () => callBackend<boolean>('InstallOptimizationMods');
+
+/**
  * Installs a mod by slug to a specific version
  * @param modId - The Mod ID
  * @param slug - The mod slug

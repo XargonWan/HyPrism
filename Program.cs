@@ -352,6 +352,7 @@ class Program
                             GetArg<string>(request.Args, 1),
                             GetArg<string>(request.Args, 2),
                             GetArg<int>(request.Args, 3)),
+                        "InstallOptimizationMods" => await app.InstallOptimizationModsAsync(),
                         "UninstallInstanceMod" => app.UninstallInstanceMod(
                             GetArg<string>(request.Args, 0),
                             GetArg<string>(request.Args, 1),

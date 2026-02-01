@@ -31,6 +31,7 @@ interface Mod {
   iconUrl?: string;
   downloads?: number;
   category?: string;
+  categories?: string[];
   curseForgeId?: number;
   fileId?: number;
   screenshots?: { id: number; title: string; thumbnailUrl: string; url: string }[];
@@ -1611,22 +1612,6 @@ export const ModManager: React.FC<ModManagerProps> = ({
                                 {formatDownloads(mod.downloadCount)}
                               </span>
                             </div>
-                            {mod.categories && mod.categories.length > 0 && (
-                              <div className="flex items-center gap-1 mt-1 flex-wrap">
-                                {mod.categories.slice(0, 3).map((cat: string | { id: number; name: string }, idx: number) => {
-                                  const catName = typeof cat === 'string' ? cat : cat.name;
-                                  return (
-                                    <span
-                                      key={idx}
-                                      className="px-1.5 py-0.5 text-[10px] rounded-md font-medium"
-                                      style={{ backgroundColor: `${accentColor}25`, color: accentColor }}
-                                    >
-                                      {t(catName)}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -1685,6 +1670,27 @@ export const ModManager: React.FC<ModManagerProps> = ({
                       {'summary' in selectedMod ? selectedMod.summary : 'description' in selectedMod ? selectedMod.description : t('No description')}
                     </p>
                   </div>
+
+                  {/* Categories */}
+                  {(('categories' in selectedMod && selectedMod.categories && (selectedMod.categories as (string | { name: string })[]).length > 0)) && (
+                    <div>
+                      <h4 className="text-white/50 text-xs uppercase mb-2">{t('Categories')}</h4>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {(selectedMod.categories as (string | { id: number; name: string })[]).map((cat, idx) => {
+                          const catName = typeof cat === 'string' ? cat : cat.name;
+                          return (
+                            <span
+                              key={idx}
+                              className="px-2 py-1 text-xs rounded-lg font-medium"
+                              style={{ backgroundColor: `${accentColor}25`, color: accentColor }}
+                            >
+                              {t(catName)}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Screenshots - show for all mods */}
                   {screenshots && screenshots.length > 0 && (

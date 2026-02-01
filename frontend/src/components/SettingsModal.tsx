@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Github, Bug, Check, AlertTriangle, ChevronDown, ExternalLink, Power, FolderOpen, Trash2, Settings, Database, Globe, Code, Image, User, Edit3, Shuffle, Copy, CheckCircle, Download, Loader2, HardDrive, Languages, FlaskConical, Box, RotateCcw } from 'lucide-react';
+import { X, Github, Bug, Check, AlertTriangle, ChevronDown, ExternalLink, Power, FolderOpen, Trash2, Settings, Database, Globe, Code, Image, User, Edit3, Shuffle, Copy, CheckCircle, Download, Loader2, HardDrive, Languages, FlaskConical, Box, RotateCcw, Monitor, Zap } from 'lucide-react';
 import { BrowserOpenURL } from '@/api/bridge';
 import { 
     GetCloseAfterLaunch, 
@@ -32,7 +32,8 @@ import {
     ResetOnboarding,
     GetShowAlphaMods,
     SetShowAlphaMods,
-    ImportInstanceFromZip
+    ImportInstanceFromZip,
+    InstallOptimizationMods
 } from '@/api/backend';
 import type { InstalledVersionInfo } from '@/api/backend';
 import { useAccentColor } from '../contexts/AccentColorContext';
@@ -76,7 +77,7 @@ interface SettingsModalProps {
     onInstanceDeleted?: () => void;
 }
 
-type SettingsTab = 'general' | 'visual' | 'language' | 'data' | 'instances' | 'about' | 'developer';
+type SettingsTab = 'general' | 'visual' | 'graphics' | 'language' | 'data' | 'instances' | 'about' | 'developer';
 
 // Auth server base URL for avatar/skin head
 const DEFAULT_AUTH_DOMAIN = 'sessions.sanasol.ws';
@@ -109,6 +110,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const [backgroundMode, setBackgroundModeState] = useState('slideshow');
     const [showAllBackgrounds, setShowAllBackgrounds] = useState(false);
     const [launcherDataDir, setLauncherDataDir] = useState('');
+    const [isInstallingOptMods, setIsInstallingOptMods] = useState(false);
+    const [optModsMessage, setOptModsMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const { accentColor, accentTextColor, setAccentColor: setAccentColorContext } = useAccentColor();
     const [contributors, setContributors] = useState<Contributor[]>([]);
     const [isLoadingContributors, setIsLoadingContributors] = useState(false);
@@ -483,6 +486,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         }
     };
 
+    const handleInstallOptimizationMods = async () => {
+        setIsInstallingOptMods(true);
+        setOptModsMessage(null);
+        try {
+            const success = await InstallOptimizationMods();
+            if (success) {
+                setOptModsMessage({ type: 'success', text: t('Optimization mods installed!') });
+            } else {
+                setOptModsMessage({ type: 'error', text: t('Failed to install optimization mods') });
+            }
+        } catch (err) {
+            console.error('Failed to install optimization mods:', err);
+            setOptModsMessage({ type: 'error', text: t('Failed to install optimization mods') });
+        }
+        setIsInstallingOptMods(false);
+        
+        // Clear message after 3 seconds
+        setTimeout(() => setOptModsMessage(null), 3000);
+    };
+
     const handleAccentColorChange = async (color: string) => {
         // Update the global context (which also saves to backend)
         await setAccentColorContext(color);
@@ -508,6 +531,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const tabs = [
         { id: 'general' as const, icon: Settings, label: t('General') },
         { id: 'visual' as const, icon: Image, label: t('Visual') },
+        { id: 'graphics' as const, icon: Monitor, label: t('Graphics') },
         { id: 'language' as const, icon: Languages, label: t('Language') },
         { id: 'data' as const, icon: Database, label: t('Data') },
         { id: 'instances' as const, icon: HardDrive, label: t('Instances') },
@@ -936,6 +960,52 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                                 style={{ backgroundColor: showAlphaMods ? accentTextColor : 'white' }}
                                             />
                                         </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Graphics Tab */}
+                            {activeTab === 'graphics' && (
+                                <div className="space-y-6">
+                                    {/* Optimization Mods */}
+                                    <div>
+                                        <label className="block text-sm text-white/60 mb-2">{t('Optimization Mods')}</label>
+                                        <p className="text-xs text-white/40 mb-4">{t('Download and install optimization mods to improve game performance')}</p>
+                                        <button
+                                            onClick={handleInstallOptimizationMods}
+                                            disabled={isInstallingOptMods}
+                                            className="w-full p-4 rounded-xl border border-white/10 hover:border-white/20 transition-all flex items-center justify-between disabled:opacity-50 disabled:cursor-not-allowed"
+                                            style={{ backgroundColor: '#151515' }}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div 
+                                                    className="w-10 h-10 rounded-xl flex items-center justify-center"
+                                                    style={{ backgroundColor: `${accentColor}20` }}
+                                                >
+                                                    <Zap size={20} style={{ color: accentColor }} />
+                                                </div>
+                                                <div className="text-left">
+                                                    <div className="text-white font-medium">{t('Enable Optimization Mods')}</div>
+                                                    <div className="text-xs text-white/40">
+                                                        {isInstallingOptMods ? t('Installing optimization mods...') : t('Install 8 performance mods to all profiles')}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {isInstallingOptMods && (
+                                                <Loader2 size={20} className="animate-spin text-white/40" />
+                                            )}
+                                        </button>
+                                        {optModsMessage && (
+                                            <div 
+                                                className={`mt-2 p-3 rounded-lg text-sm ${
+                                                    optModsMessage.type === 'success' 
+                                                        ? 'bg-green-500/20 text-green-400' 
+                                                        : 'bg-red-500/20 text-red-400'
+                                                }`}
+                                            >
+                                                {optModsMessage.text}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             )}
