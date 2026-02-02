@@ -159,7 +159,8 @@ if [[ "$(uname -s)" == "Linux" ]]; then
     fi
     if [[ "$DO_FLATPAK" == "1" ]]; then
       require_tool flatpak-builder "flatpak flatpak-builder" "flatpak flatpak-builder" ""
-      # appstream-compose is required by flatpak-builder for AppStream metadata
+      # AppStream metadata helpers for Flatpak: prefer appstream-compose on Debian/Ubuntu,
+      # but on Fedora use appstream + desktop-file-utils (appstream-compose may not be packaged there).
       if [[ "$AUTO_INSTALL" == "1" ]]; then
         if [[ "$(detect_distro)" == "ubuntu" || "$(detect_distro)" == "debian" ]]; then
           if apt-cache show appstream-compose >/dev/null 2>&1; then
@@ -171,7 +172,16 @@ if [[ "$(uname -s)" == "Linux" ]]; then
           sudo dnf -y install appstream desktop-file-utils || true
         fi
       fi
-      require_tool appstream-compose "appstream appstream-util desktop-file-utils" "appstream desktop-file-utils" ""
+
+      # Require appropriate tool depending on distro: on Debian/Ubuntu require appstream-compose,
+      # on other distros require the generic appstream tooling which is available on Fedora.
+      if [[ "$(detect_distro)" == "ubuntu" || "$(detect_distro)" == "debian" ]]; then
+        require_tool appstream-compose "appstream appstream-util desktop-file-utils" "appstream appstream-util desktop-file-utils" ""
+      else
+        # Fedora: prefer the 'appstreamcli' executable provided by the 'appstream' package
+        # (the 'appstream' command name may not exist, so check/use appstreamcli)
+        require_tool appstreamcli "appstream desktop-file-utils" "appstream desktop-file-utils" ""
+      fi
     fi
   fi
 fi
@@ -248,6 +258,14 @@ if [[ "$(uname -s)" == "Linux" ]]; then
   rm -rf "$PKGROOT"
   mkdir -p "$PKGROOT/opt/hyprism" "$PKGROOT/usr/bin" "$PKGROOT/usr/share/applications" "$PKGROOT/usr/share/icons/hicolor/256x256/apps"
   cp -R "$LINUX_OUT"/* "$PKGROOT/opt/hyprism/"
+  # Replace the packaged binary with a thin wrapper script when building AppImage/Flatpak only
+  if [[ ( "$DO_APPIMAGE" == "1" || "$DO_FLATPAK" == "1" ) && "$DO_DEB" == "0" ]]; then
+    if [[ -f "$PKGROOT/opt/hyprism/HyPrism" ]]; then
+      mv "$PKGROOT/opt/hyprism/HyPrism" "$PKGROOT/opt/hyprism/HyPrism.real" || true
+      printf '#!/bin/sh\nexec /opt/hyprism/HyPrism.real --wrapper "\$@"' > "$PKGROOT/opt/hyprism/HyPrism"
+      chmod +x "$PKGROOT/opt/hyprism/HyPrism" || true
+    fi
+  fi
   ln -sf /opt/hyprism/HyPrism "$PKGROOT/usr/bin/hyprism"
   [[ -f "$DESKTOP_SRC" ]] && cp "$DESKTOP_SRC" "$PKGROOT/usr/share/applications/dev.hyprism.HyPrism.desktop"
   [[ -f "$ICON_SRC" ]] && cp "$ICON_SRC" "$PKGROOT/usr/share/icons/hicolor/256x256/apps/dev.hyprism.HyPrism.png"

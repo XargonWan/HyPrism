@@ -52,6 +52,9 @@ import {
   GetCustomInstanceDir,
   SetInstanceDirectory,
   GetNews,
+  GetWrapperStatus,
+  WrapperInstallLatest,
+  WrapperLaunch,
   GetLauncherVersion,
   GetLauncherBranch,
   SetLauncherBranch,
@@ -193,6 +196,33 @@ const App: React.FC = () => {
   // Onboarding state
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
   const [onboardingChecked, setOnboardingChecked] = useState<boolean>(false);
+
+  // Wrapper mode state (for Flatpak/AppImage wrapper delivery)
+  const isWrapperMode = typeof window !== 'undefined' && (window.location.search.includes('wrapper=1') || window.location.search.includes('wrapper=true'));
+  const [wrapperStatus, setWrapperStatus] = useState<null | {
+    installed: boolean;
+    installedVersion: string;
+    latestVersion: string;
+    updateAvailable: boolean;
+    downloadUrl: string;
+    assetName: string;
+    message: string;
+  }>(null);
+  const [isWrapperWorking, setIsWrapperWorking] = useState<boolean>(false);
+
+  const refreshWrapperStatus = async () => {
+    try {
+      const s = await GetWrapperStatus();
+      setWrapperStatus(s as any);
+    } catch (e) {
+      console.error('Wrapper status failed', e);
+    }
+  };
+
+  useEffect(() => {
+    if (!isWrapperMode) return;
+    refreshWrapperStatus();
+  }, []);
 
   // Pending game update modal
   const [pendingUpdate, setPendingUpdate] = useState<{
@@ -492,6 +522,75 @@ const App: React.FC = () => {
       }
     };
     loadSettings();
+
+    // Wrapper UI helpers (only when launched in wrapper mode)
+    const refreshWrapperStatusLocal = async () => {
+      setIsWrapperWorking(true);
+      try {
+        await refreshWrapperStatus();
+      } catch (e) {
+        console.error('refreshWrapperStatusLocal failed', e);
+      }
+      setIsWrapperWorking(false);
+    };
+
+    const doInstallWrapper = async () => {
+      setIsWrapperWorking(true);
+      try {
+        const ok = await WrapperInstallLatest();
+        if (!ok) {
+          window.alert('Install failed - check logs');
+        }
+      } catch (e) {
+        console.error('Install failed', e);
+      }
+      await refreshWrapperStatus();
+      setIsWrapperWorking(false);
+    };
+
+    const doLaunchWrapper = async () => {
+      setIsWrapperWorking(true);
+      try {
+        const ok = await WrapperLaunch();
+        if (!ok) window.alert('Failed to launch HyPrism');
+      } catch (e) {
+        console.error('Launch failed', e);
+      }
+      setIsWrapperWorking(false);
+    };
+
+    // Early return for wrapper mode - simplified UI: background, news, and update/install/launch controls
+    if (isWrapperMode) {
+      return (
+        <div className="w-full h-full relative text-white">
+          <BackgroundImage />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="bg-black/70 p-6 rounded-lg w-[720px] max-w-full">
+              <h1 className="text-2xl font-bold mb-2">HyPrism</h1>
+              <p className="mb-4">Wrapper mode — scarica e avvia la versione completa di HyPrism</p>
+
+              <div className="mb-4">
+                <div>Installed: {wrapperStatus?.installed ? wrapperStatus.installedVersion : 'none'}</div>
+                <div>Latest: {wrapperStatus?.latestVersion || '—'}</div>
+                <div className="mt-2">{wrapperStatus?.updateAvailable ? <span className="text-yellow-400">Update available</span> : <span className="text-green-400">Up to date</span>}</div>
+              </div>
+
+              <div className="flex gap-3 mb-4">
+                <button className="px-4 py-2 bg-slate-700 rounded" onClick={refreshWrapperStatusLocal} disabled={isWrapperWorking}>Check for updates</button>
+                <button className="px-4 py-2 bg-amber-500 rounded" onClick={doInstallWrapper} disabled={!wrapperStatus?.updateAvailable || isWrapperWorking}>Download & Install</button>
+                <button className="px-4 py-2 bg-emerald-500 rounded" onClick={doLaunchWrapper} disabled={!wrapperStatus?.installed || isWrapperWorking}>Launch</button>
+              </div>
+
+              <div className="mt-6">
+                <Suspense fallback={<div>Loading news…</div>}>
+                  <NewsPreview getNews={async (count) => { const n = await GetNews(count); return n; }} isPaused={false} />
+                </Suspense>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     // Event listeners
     const unsubProgress = EventsOn('progress-update', (data: any) => {

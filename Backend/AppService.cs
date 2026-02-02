@@ -7143,6 +7143,420 @@ rm -f ""$0""
         }
     }
 
+    // Wrapper helper types and methods - installs the real HyPrism into $XDG_DATA_HOME/HyPrism
+    public class WrapperStatus
+    {
+        public bool Installed { get; set; }
+        public string InstalledVersion { get; set; } = "";
+        public string LatestVersion { get; set; } = "";
+        public bool UpdateAvailable { get; set; }
+        public string DownloadUrl { get; set; } = "";
+        public string AssetName { get; set; } = "";
+        public string Message { get; set; } = "";
+    }
+
+    // Wrapper mode state
+    private bool _isWrapperMode = false;
+    private bool _wrapperAutoInstalling = false;
+    private DateTime _lastWrapperAutoInstallAttempt = DateTime.MinValue;
+    private readonly object _wrapperLock = new();
+
+    public void SetWrapperMode(bool enabled)
+    {
+        _isWrapperMode = enabled;
+        Logger.Info("Wrapper", $"Wrapper mode set: {enabled}");
+        WritePersistentWrapperLog($"Wrapper mode set: {enabled}");
+    }
+
+    private string GetWrapperInstallDir()
+    {
+        var xdg = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+        if (string.IsNullOrWhiteSpace(xdg))
+        {
+            xdg = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "share");
+        }
+        var dir = Path.Combine(xdg, "HyPrism");
+        Directory.CreateDirectory(dir);
+        return dir;
+    }
+
+    private string? ReadInstalledWrapperVersion(string installDir)
+    {
+        var vpath = Path.Combine(installDir, "version.txt");
+        if (!File.Exists(vpath)) return null;
+        try { return File.ReadAllText(vpath).Trim(); } catch { return null; }
+    }
+
+    // Persist wrapper logs to $XDG_DATA_HOME/HyPrism/logs/wrapper.log for easier inspection
+    private void WritePersistentWrapperLog(string line)
+    {
+        try
+        {
+            var dir = GetWrapperInstallDir();
+            var logsDir = Path.Combine(dir, "logs");
+            Directory.CreateDirectory(logsDir);
+            var logPath = Path.Combine(logsDir, "wrapper.log");
+            var timestamped = $"{DateTime.UtcNow:O} | {line}\n";
+            File.AppendAllText(logPath, timestamped);
+        }
+        catch
+        {
+            // Ignore logging failures - persistent logging is best-effort
+        }
+    }
+
+    public async Task<WrapperStatus> GetWrapperStatusAsync()
+    {
+        var status = new WrapperStatus();
+        try
+        {
+            Logger.Info("Wrapper", "Checking latest release for wrapper");
+            WritePersistentWrapperLog("Checking latest release (wrapper)");
+
+            // Installed version
+            var dir = GetWrapperInstallDir();
+            var installed = ReadInstalledWrapperVersion(dir);
+            status.Installed = !string.IsNullOrWhiteSpace(installed);
+            status.InstalledVersion = installed ?? "";
+
+            // Determine channel
+            var launcherBranch = GetLauncherBranch();
+            var isBetaChannel = launcherBranch == "beta";
+
+            // Query GitHub releases
+            var apiUrl = "https://api.github.com/repos/yyyumeniku/HyPrism/releases?per_page=50";
+            var json = await HttpClient.GetStringAsync(apiUrl);
+            using var doc = JsonDocument.Parse(json);
+
+            JsonElement? chosen = null;
+            string? chosenVersion = null;
+
+            foreach (var release in doc.RootElement.EnumerateArray())
+            {
+                var isPrerelease = release.TryGetProperty("prerelease", out var prereleaseVal) && prereleaseVal.GetBoolean();
+                if (isBetaChannel && !isPrerelease) continue;
+                if (!isBetaChannel && isPrerelease) continue;
+
+                var tagName = release.GetProperty("tag_name").GetString();
+                if (string.IsNullOrWhiteSpace(tagName)) continue;
+                var version = ParseVersionFromTag(tagName);
+                if (string.IsNullOrWhiteSpace(version)) continue;
+
+                chosen = release;
+                chosenVersion = version;
+                break;
+            }
+
+            if (!chosen.HasValue || string.IsNullOrWhiteSpace(chosenVersion))
+            {
+                status.Message = "No release found";
+                Logger.Info("Wrapper", "No suitable release found");
+                WritePersistentWrapperLog("No suitable release found");
+                return status;
+            }
+
+            status.LatestVersion = chosenVersion;
+
+            // pick linux asset
+            string? targetAsset = null;
+            var arch = RuntimeInformation.ProcessArchitecture;
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                // Prefer tarball inside Flatpak (easier to extract/install in sandbox), otherwise AppImage for x64
+                var isFlatpak = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FLATPAK_SANDBOX_DIR")) ||
+                                !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FLATPAK_ID"));
+
+                if (arch == Architecture.Arm64)
+                {
+                    // ARM - prefer tarball
+                    targetAsset = "linux-arm64.tar.gz";
+                }
+                else
+                {
+                    targetAsset = isFlatpak ? "linux-x64.tar.gz" : "linux-x64.AppImage";
+                }
+
+                Logger.Info("Wrapper", $"Selecting asset for linux (flatpak={isFlatpak}): {targetAsset}");
+                WritePersistentWrapperLog($"Selecting asset for linux (flatpak={isFlatpak}): {targetAsset}");
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                targetAsset = "macos-arm64.dmg";
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                targetAsset = "windows-x64.exe";
+
+            if (string.IsNullOrWhiteSpace(targetAsset))
+            {
+                status.Message = "Unsupported OS";
+                Logger.Warning("Wrapper", "Unsupported OS for wrapper installation");
+                WritePersistentWrapperLog("Unsupported OS for wrapper installation");
+                return status;
+            }
+
+            var assets = chosen.Value.GetProperty("assets");
+
+            // Try to find the exact preferred asset first, otherwise fallback to matching common names
+            foreach (var asset in assets.EnumerateArray())
+            {
+                var name = asset.GetProperty("name").GetString();
+                if (!string.IsNullOrWhiteSpace(name) && name.Contains(targetAsset, StringComparison.OrdinalIgnoreCase))
+                {
+                    status.DownloadUrl = asset.GetProperty("browser_download_url").GetString() ?? "";
+                    status.AssetName = name ?? "";
+                    break;
+                }
+            }
+
+            // fallback: prefer any AppImage or linux tarball if exact name not found
+            if (string.IsNullOrWhiteSpace(status.DownloadUrl))
+            {
+                foreach (var asset in assets.EnumerateArray())
+                {
+                    var name = asset.GetProperty("name").GetString() ?? "";
+                    if (name.EndsWith(".AppImage", StringComparison.OrdinalIgnoreCase) && (targetAsset?.EndsWith("AppImage") == true || targetAsset?.EndsWith("tar.gz") == false))
+                    {
+                        status.DownloadUrl = asset.GetProperty("browser_download_url").GetString() ?? "";
+                        status.AssetName = name;
+                        break;
+                    }
+                    if (name.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) && targetAsset?.EndsWith("tar.gz") == true)
+                    {
+                        status.DownloadUrl = asset.GetProperty("browser_download_url").GetString() ?? "";
+                        status.AssetName = name;
+                        break;
+                    }
+                }
+            }
+
+            status.UpdateAvailable = IsNewerVersion(status.LatestVersion, status.InstalledVersion == "" ? "0" : status.InstalledVersion);
+
+            Logger.Info("Wrapper", $"Status: installed={status.Installed} installedVersion={status.InstalledVersion} latest={status.LatestVersion} updateAvailable={status.UpdateAvailable}");
+            WritePersistentWrapperLog($"Status: installed={status.Installed} installedVersion={status.InstalledVersion} latest={status.LatestVersion} updateAvailable={status.UpdateAvailable}");
+
+            // If running as wrapper, automatically install latest when available (best-effort, non-interactive)
+            if (status.UpdateAvailable && _isWrapperMode)
+            {
+                lock (_wrapperLock)
+                {
+                    var now = DateTime.UtcNow;
+                    if (!_wrapperAutoInstalling && (now - _lastWrapperAutoInstallAttempt) > TimeSpan.FromMinutes(1))
+                    {
+                        _wrapperAutoInstalling = true;
+                        _lastWrapperAutoInstallAttempt = now;
+
+                        Logger.Info("Wrapper", "Auto-install scheduled (wrapper mode)");
+                        WritePersistentWrapperLog("Auto-install scheduled (wrapper mode)");
+
+                        // Run install in background
+                        Task.Run(async () =>
+                        {
+                            try
+                            {
+                                var ok = await WrapperInstallLatestAsync();
+                                Logger.Info("Wrapper", $"Auto-install {(ok ? "succeeded" : "failed")}");
+                                WritePersistentWrapperLog($"Auto-install {(ok ? "succeeded" : "failed")}");
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.Error("Wrapper", $"Auto-install error: {ex.Message}");
+                                WritePersistentWrapperLog($"Auto-install error: {ex.Message}");
+                            }
+                            finally
+                            {
+                                lock (_wrapperLock) { _wrapperAutoInstalling = false; }
+                            }
+                        });
+                    }
+                }
+            }
+
+            return status;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Wrapper", $"Get status failed: {ex.Message}");
+            WritePersistentWrapperLog($"Get status failed: {ex.Message}");
+            status.Message = ex.Message;
+            return status;
+        }
+    }
+
+    public async Task<bool> WrapperInstallLatestAsync()
+    {
+        try
+        {
+            var status = await GetWrapperStatusAsync();
+            if (string.IsNullOrWhiteSpace(status.DownloadUrl)) throw new Exception("No download URL available");
+
+            var temp = Path.Combine(Path.GetTempPath(), status.AssetName);
+            Logger.Info("Wrapper", $"Downloading {status.AssetName} to {temp}");
+            WritePersistentWrapperLog($"Downloading {status.AssetName} to {temp}");
+            using (var response = await HttpClient.GetAsync(status.DownloadUrl, HttpCompletionOption.ResponseHeadersRead))
+            {
+                response.EnsureSuccessStatusCode();
+                await using var stream = await response.Content.ReadAsStreamAsync();
+                await using var file = new FileStream(temp, FileMode.Create, FileAccess.Write, FileShare.None);
+                var buffer = new byte[8192];
+                int read;
+                while ((read = await stream.ReadAsync(buffer)) > 0)
+                {
+                    await file.WriteAsync(buffer.AsMemory(0, read));
+                    // Optionally: write progress to persistent log every N iterations (omitted for brevity)
+                }
+            }
+
+            var installDir = GetWrapperInstallDir();
+
+            if (status.AssetName.EndsWith(".AppImage", StringComparison.OrdinalIgnoreCase))
+            {
+                // Detect if running inside Flatpak
+                var isFlatpak = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FLATPAK_SANDBOX_DIR")) ||
+                                !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("FLATPAK_ID"));
+
+                // If inside Flatpak, keep AppImage in user data dir (we'll not replace the flatpak-provided binary)
+                if (isFlatpak)
+                {
+                    var dest = Path.Combine(installDir, "HyPrism.AppImage");
+                    if (File.Exists(dest)) File.Delete(dest);
+                    File.Move(temp, dest);
+                    Process.Start("chmod", $"+x \"{dest}\"")?.WaitForExit();
+                    WritePersistentWrapperLog($"Moved AppImage to {dest} (flatpak mode)");
+                }
+                else
+                {
+                    // Not running inside Flatpak: if current exe is an AppImage, replace it and restart
+                    var currentExe = Environment.ProcessPath ?? "";
+                    if (!string.IsNullOrEmpty(currentExe) && currentExe.EndsWith(".AppImage", StringComparison.OrdinalIgnoreCase) && File.Exists(currentExe))
+                    {
+                        // Make downloaded file executable
+                        Process.Start("chmod", $"+x \"{temp}\"")?.WaitForExit();
+
+                        // Create update script to replace the AppImage and relaunch
+                        var updateScript = Path.Combine(Path.GetTempPath(), "hyprism_appimage_update.sh");
+                        var scriptContent = $"#!/bin/bash\nsleep 1\nset -e\n\n# Replace the running AppImage\nmv \"{temp}\" \"{currentExe}\"\nchmod +x \"{currentExe}\"\n\"{currentExe}\" &\nrm -f \"$0\"\n";
+                        File.WriteAllText(updateScript, scriptContent);
+                        Process.Start("chmod", $"+x \"{updateScript}\"")?.WaitForExit();
+
+                        WritePersistentWrapperLog($"Prepared AppImage self-update script {updateScript} to replace {currentExe}");
+
+                        // Start the update script and exit this process so updater can replace file
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = "/bin/bash",
+                            Arguments = $"\"{updateScript}\"",
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        });
+
+                        Logger.Info("Wrapper", "Started AppImage self-update script, exiting launcher...");
+                        WritePersistentWrapperLog("Started AppImage self-update script, exiting launcher...");
+
+                        // Exit process so script can move file
+                        Environment.Exit(0);
+                    }
+                    else
+                    {
+                        // Fallback: store in install dir
+                        var dest = Path.Combine(installDir, "HyPrism.AppImage");
+                        if (File.Exists(dest)) File.Delete(dest);
+                        File.Move(temp, dest);
+                        Process.Start("chmod", $"+x \"{dest}\"")?.WaitForExit();
+                        WritePersistentWrapperLog($"Moved AppImage to {dest} (fallback)");
+                    }
+                }
+            }
+            else if (status.AssetName.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase) || status.AssetName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            {
+                // Extract archive
+                try
+                {
+                    if (status.AssetName.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Use tar to extract
+                        Directory.CreateDirectory(installDir);
+                        var psi = new ProcessStartInfo("tar", $"-xzf \"{temp}\" -C \"{installDir}\"") { UseShellExecute = false };
+                        var p = Process.Start(psi);
+                        p?.WaitForExit();
+                    }
+                    else
+                    {
+                        System.IO.Compression.ZipFile.ExtractToDirectory(temp, installDir, true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error("Wrapper", $"Extraction failed: {ex.Message}");
+                    throw;
+                }
+            }
+            else if (status.AssetName.EndsWith(".dmg", StringComparison.OrdinalIgnoreCase))
+            {
+                // macOS: place DMG in install dir
+                var dest = Path.Combine(installDir, status.AssetName);
+                if (File.Exists(dest)) File.Delete(dest);
+                File.Move(temp, dest);
+            }
+            else if (status.AssetName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            {
+                var dest = Path.Combine(installDir, status.AssetName);
+                if (File.Exists(dest)) File.Delete(dest);
+                File.Move(temp, dest);
+            }
+
+            // Write version file
+            var versionPath = Path.Combine(installDir, "version.txt");
+            File.WriteAllText(versionPath, status.LatestVersion ?? "");
+
+            Logger.Success("Wrapper", $"Installed HyPrism {status.LatestVersion} to {installDir}");
+            WritePersistentWrapperLog($"Installed HyPrism {status.LatestVersion} to {installDir}");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Wrapper", $"Install failed: {ex.Message}");
+            WritePersistentWrapperLog($"Install failed: {ex.Message}");
+            return false;
+        }
+    }
+
+    public bool WrapperLaunch()
+    {
+        try
+        {
+            var installDir = GetWrapperInstallDir();
+            // Prefer AppImage/HyPrism executable
+            var appimage = Path.Combine(installDir, "HyPrism.AppImage");
+            if (File.Exists(appimage))
+            {
+                WritePersistentWrapperLog($"Launching {appimage}");
+                var psi = new ProcessStartInfo(appimage) { UseShellExecute = true };
+                Process.Start(psi);
+                return true;
+            }
+
+            // Try common exe names
+            var exe = Path.Combine(installDir, "HyPrism");
+            if (File.Exists(exe))
+            {
+                WritePersistentWrapperLog($"Launching {exe}");
+                var psi = new ProcessStartInfo(exe) { UseShellExecute = true };
+                Process.Start(psi);
+                return true;
+            }
+
+            // If none, return false
+            Logger.Warning("Wrapper", "No HyPrism executable found to launch");
+            WritePersistentWrapperLog("No HyPrism executable found to launch");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Wrapper", $"Launch failed: {ex.Message}");
+            WritePersistentWrapperLog($"Launch failed: {ex.Message}");
+            return false;
+        }
+    }
+
     // Browser
     public bool BrowserOpenURL(string url)
     {

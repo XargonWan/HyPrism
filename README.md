@@ -18,6 +18,8 @@ A multiplatform Hytale launcher with mod manager and more!
 ## Installation
 Downloads are available in [releases](https://github.com/yyyumeniku/HyPrism/releases)
 
+**Documentation:** Full user and developer documentation is available in the `docs/` directory (ReadTheDocs-friendly).
+
 For older Linux OSes the Flatpak will be the only feasable solution.
 
 ## Build instructions

@@ -939,6 +939,21 @@ export const ResetOnboarding = () => callBackend<boolean>('ResetOnboarding');
  */
 export const GetNews = (count: number) => callBackend<Array<news.NewsItem>>('GetNews', count);
 
+// Wrapper API - used when the distributed package only provides a thin wrapper
+export interface WrapperStatus {
+  installed: boolean;
+  installedVersion: string;
+  latestVersion: string;
+  updateAvailable: boolean;
+  downloadUrl: string;
+  assetName: string;
+  message: string;
+}
+
+export const GetWrapperStatus = () => callBackend<WrapperStatus>('WrapperGetStatus');
+export const WrapperInstallLatest = () => callBackend<boolean>('WrapperInstallLatest');
+export const WrapperLaunch = () => callBackend<boolean>('WrapperLaunch');
+
 // Discord
 
 /**
