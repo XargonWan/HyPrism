@@ -25,7 +25,7 @@
         
         <!-- Modal Content -->
         <Border Background="#0d0d0d" 
-                CornerRadius="16" 
+                CornerRadius="12" 
                 BorderBrush="#FF4444" 
                 BorderThickness="1"
                 MaxWidth="550" 

@@ -36,15 +36,23 @@
             <Setter Property="Background" Value="#1AFFFFFF"/>
             <Setter Property="Foreground" Value="White"/>
         </Style>
+        
+        <!-- Close Button Hover Style -->
+        <Style Selector="Button#CloseButton:pointerover">
+            <Setter Property="Background" Value="#33FF4444"/>
+        </Style>
+        <Style Selector="Button#CloseButton:pointerover svg|Svg">
+            <Setter Property="Css" Value="* { stroke: #FF4444; fill: none; }"/>
+        </Style>
     </UserControl.Styles>
 
-    <Border Background="#F2111111" CornerRadius="16" BorderBrush="#33FFFFFF" BorderThickness="1" ClipToBounds="True" BoxShadow="0 10 30 5 #000000">
+    <Border Background="#F2111111" CornerRadius="12" BorderBrush="#33FFFFFF" BorderThickness="1" ClipToBounds="True" BoxShadow="0 10 30 5 #000000">
         <Grid ColumnDefinitions="240, *">
             
             <!-- Sidebar -->
             <Border Grid.Column="0" Background="#111111">
                 <Grid RowDefinitions="Auto, *">
-                    <TextBlock Text="{Binding SettingsTitle^}" Grid.Row="0" Margin="25,30,0,30" FontSize="20" FontWeight="Bold" Foreground="White" FontFamily="{StaticResource Poppins}"/>
+                    <TextBlock Text="{Binding SettingsTitle^}" Grid.Row="0" Margin="30,30,30,30" FontSize="28" FontWeight="Bold" Foreground="White" FontFamily="{StaticResource Poppins}"/>
                     
                     <ScrollViewer Grid.Row="1">
                         <StackPanel Spacing="4" Margin="10,0">
@@ -126,11 +134,20 @@
                 </Grid.RowDefinitions>
                 
                 <!-- Header / Close -->
-                <Grid Grid.Row="0" Margin="30,0">
-                    <Button Command="{Binding CloseCommand}" HorizontalAlignment="Right" VerticalAlignment="Center"
-                            Background="#1AFFFFFF" Foreground="White" Width="32" Height="32" CornerRadius="16"
-                            Padding="8" BorderThickness="0">
-                         <svg:Svg Path="/Assets/Icons/x.svg" Width="14" Height="14"/>
+                <Grid Grid.Row="0">
+                    <Button Command="{Binding CloseCommand}" 
+                            HorizontalAlignment="Right" 
+                            VerticalAlignment="Top"
+                            Margin="20,20,20,0"
+                            Background="Transparent" 
+                            Foreground="White" 
+                            Width="32" 
+                            Height="32" 
+                            CornerRadius="6"
+                            Padding="6" 
+                            BorderThickness="0"
+                            Name="CloseButton">
+                         <svg:Svg Path="/Assets/Icons/x.svg" Width="20" Height="20"/>
                     </Button>
                 </Grid>
                 

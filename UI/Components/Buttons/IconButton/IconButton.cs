@@ -45,6 +45,12 @@ public class IconButton : Button
         private set => SetValue(HoverCssProperty, value);
     }
 
+    public IconButton()
+    {
+        // Initialize with accent color as soon as possible
+        UpdateHoverCss();
+    }
+
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
@@ -58,6 +64,7 @@ public class IconButton : Button
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
     {
         base.OnAttachedToVisualTree(e);
+        // Re-update in case resources weren't available during constructor
         UpdateHoverCss();
     }
 
@@ -70,6 +77,11 @@ public class IconButton : Button
             var c = accentBrush.Color;
             var hexColor = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
             HoverCss = $"* {{ stroke: {hexColor}; fill: none; }}";
+        }
+        else
+        {
+            // Fallback to HytaleOrange if SystemAccentBrush is not available
+            HoverCss = "* { stroke: #FFA845; fill: none; }";
         }
     }
 }
