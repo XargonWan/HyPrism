@@ -1604,7 +1604,7 @@ export const ModManager: React.FC<ModManagerProps> = ({
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-2 text-white/50 text-xs">
+                            <div className="flex items-center gap-2 text-white/50 text-xs mt-1">
                               <span>{mod.author || mod.authors?.[0]?.name || t('Unknown')}</span>
                               <span>•</span>
                               <span>

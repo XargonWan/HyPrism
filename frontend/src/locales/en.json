@@ -237,5 +237,11 @@
     "Unofficial Hytale Launcher": "Unofficial Hytale Launcher",
     "Exported to Downloads folder": "Exported to Downloads folder",
     "No UserData folder to export": "No UserData folder to export",
-    "Failed to export instance": "Failed to export instance"
+    "Failed to export instance": "Failed to export instance",
+    "Duplicate Profile": "Duplicate Profile",
+    "Playtime": "Playtime",
+    "Data": "Data",
+    "Created": "Created",
+    "Updated": "Updated",
+    "No data": "No data"
 }

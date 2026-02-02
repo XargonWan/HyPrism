@@ -222,8 +222,6 @@ public class AppService : IDisposable
         public DateTime UpdatedAt { get; set; }  // When the version was last updated (from latest.json)
         public long PlayTimeSeconds { get; set; } = 0;
         public bool IsLatestInstance { get; set; } = false;  // True for "latest" instance, false for specific version instances
-        public bool IsPrerelease { get; set; } = false;  // True if this is a pre-release/beta instance
-        public bool IsRelease { get; set; } = true;  // True if this is a release/stable instance
         public string Branch { get; set; } = "release";  // The branch name (release, pre-release)
         
         // Helper to format playtime as DD:HH:MM:SS
@@ -287,21 +285,26 @@ public class AppService : IDisposable
             {
                 Version = version,
                 CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
                 PlayTimeSeconds = 0,
                 Branch = normalizedBranch,
-                IsPrerelease = normalizedBranch == "pre-release",
-                IsRelease = normalizedBranch == "release"
+                IsLatestInstance = (version == 0)
             };
             SaveInstanceInfo(branch, version, info);
+            Logger.Info("InstanceInfo", $"Created instance.json for {normalizedBranch}/{version} (latest: {info.IsLatestInstance})");
         }
         else if (string.IsNullOrEmpty(info.Branch))
         {
             // Migrate old instance.json files that don't have Branch info
             var normalizedBranch = branch.ToLower();
             info.Branch = normalizedBranch;
-            info.IsPrerelease = normalizedBranch == "pre-release";
-            info.IsRelease = normalizedBranch == "release";
+            info.IsLatestInstance = (version == 0);
+            if (info.UpdatedAt == DateTime.MinValue || info.UpdatedAt == default)
+            {
+                info.UpdatedAt = info.CreatedAt;
+            }
             SaveInstanceInfo(branch, version, info);
+            Logger.Info("InstanceInfo", $"Migrated instance.json for {normalizedBranch}/{version}");
         }
     }
 
@@ -414,33 +417,39 @@ public class AppService : IDisposable
             }
             else
             {
-                // On macOS/Linux, use 'unlink' or 'rm' without -r to safely remove symlink
+                // On macOS/Linux, use 'rm' without -r to safely remove symlink
                 var processInfo = new ProcessStartInfo
                 {
-                    FileName = "rm",
-                    Arguments = $"\"{symlinkPath}\"",  // rm without -r only removes the symlink itself
+                    FileName = "/bin/rm",
                     CreateNoWindow = true,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true
                 };
+                processInfo.ArgumentList.Add(symlinkPath);  // ArgumentList handles spaces properly
                 
                 using var process = Process.Start(processInfo);
-                process?.WaitForExit(5000);
-                
-                if (process?.ExitCode != 0)
+                if (process != null)
                 {
-                    // Fallback - try Directory.Delete with recursive=false
-                    // Note: This might still follow the symlink on some systems
-                    Directory.Delete(symlinkPath, false);
+                    var stderr = process.StandardError.ReadToEnd();
+                    process.WaitForExit(5000);
+                    
+                    if (process.ExitCode != 0)
+                    {
+                        Logger.Warning("UserData", $"rm command failed (exit {process.ExitCode}): {stderr}");
+                        // Fallback - try Directory.Delete with recursive=false
+                        Directory.Delete(symlinkPath, false);
+                    }
+                    else
+                    {
+                        Logger.Info("UserData", $"Safely removed symlink: {symlinkPath}");
+                    }
                 }
             }
-            
-            Logger.Info("Mods", $"Safely removed symlink: {symlinkPath}");
         }
         catch (Exception ex)
         {
-            Logger.Warning("Mods", $"Failed to safely delete symlink {symlinkPath}: {ex.Message}");
+            Logger.Warning("UserData", $"Failed to safely delete symlink {symlinkPath}: {ex.Message}");
         }
     }
 
@@ -2213,6 +2222,75 @@ public class AppService : IDisposable
     }
     
     /// <summary>
+    /// Duplicates a profile by ID but does NOT copy the UserData folder.
+    /// Only copies name and UUID (with a new name suffix).
+    /// Returns the new duplicated profile.
+    /// </summary>
+    public Profile? DuplicateProfileWithoutData(string profileId)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(profileId))
+            {
+                Logger.Warning("Profile", "Cannot duplicate profile with empty ID");
+                return null;
+            }
+            
+            // Find the source profile
+            var sourceProfile = _config.Profiles?.FirstOrDefault(p => p.Id == profileId);
+            if (sourceProfile == null)
+            {
+                Logger.Warning("Profile", $"Profile not found: {profileId}");
+                return null;
+            }
+            
+            // Keep the EXACT same name as source - the folder will have " Copy" appended
+            // but the display name stays the same
+            var folderName = $"{sourceProfile.Name} Copy";
+            
+            // Check if a profile folder with this name already exists, and add number suffix
+            var profilesDir = GetProfilesFolder();
+            if (Directory.Exists(Path.Combine(profilesDir, folderName)))
+            {
+                for (int i = 2; i <= 99; i++)
+                {
+                    var numberedFolder = $"{sourceProfile.Name} Copy {i}";
+                    if (!Directory.Exists(Path.Combine(profilesDir, numberedFolder)))
+                    {
+                        folderName = numberedFolder;
+                        break;
+                    }
+                }
+            }
+            
+            // Keep the same UUID and NAME as source profile - only folder name has "Copy"
+            var newProfile = new Profile
+            {
+                Id = Guid.NewGuid().ToString(),
+                UUID = sourceProfile.UUID,  // Same UUID
+                Name = sourceProfile.Name,  // SAME display name
+                CreatedAt = DateTime.UtcNow,
+                FolderName = folderName  // Different folder
+            };
+            
+            _config.Profiles ??= new List<Profile>();
+            _config.Profiles.Add(newProfile);
+            SaveConfig();
+            
+            // Save profile to disk with the folder name (but don't copy UserData)
+            SaveProfileToDiskWithFolder(newProfile, folderName);
+            
+            Logger.Success("Profile", $"Duplicated profile '{sourceProfile.Name}' to folder '{folderName}' (without UserData)");
+            return newProfile;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Profile", $"Failed to duplicate profile without data: {ex.Message}");
+            return null;
+        }
+    }
+    
+    /// <summary>
     /// Deletes a profile by its ID.
     /// Returns true if successful.
     /// </summary>
@@ -2339,7 +2417,8 @@ public class AppService : IDisposable
     private string GetProfileUserDataFolder(Profile profile)
     {
         var profilesDir = GetProfilesFolder();
-        var safeName = SanitizeFileName(profile.Name);
+        // Use FolderName if specified, otherwise use profile name
+        var safeName = SanitizeFileName(profile.FolderName ?? profile.Name);
         var profileDir = Path.Combine(profilesDir, safeName);
         var userDataDir = Path.Combine(profileDir, "UserData");
         Directory.CreateDirectory(userDataDir);
@@ -2412,13 +2491,26 @@ public class AppService : IDisposable
             // Ensure target folder exists
             Directory.CreateDirectory(profileUserDataPath);
             
-            // Remove existing symlink or folder at instance UserData path
+            // Check if symlink already exists and points to correct target
             if (Directory.Exists(instanceUserDataPath))
             {
                 var info = new DirectoryInfo(instanceUserDataPath);
                 if (info.Attributes.HasFlag(FileAttributes.ReparsePoint))
                 {
-                    // It's a symlink, safely remove it
+                    // It's already a symlink - check if it points to the right place
+                    try
+                    {
+                        var target = info.ResolveLinkTarget(false)?.FullName;
+                        if (target != null && Path.GetFullPath(target) == Path.GetFullPath(profileUserDataPath))
+                        {
+                            // Already pointing to the correct profile, nothing to do
+                            Logger.Info("UserData", "Symlink already exists and points to correct profile");
+                            return;
+                        }
+                    }
+                    catch { /* Ignore errors resolving link target */ }
+                    
+                    // Symlink exists but points elsewhere, remove it
                     SafeDeleteSymlink(instanceUserDataPath);
                 }
                 else
@@ -2456,8 +2548,17 @@ public class AppService : IDisposable
                     catch (Exception ex)
                     {
                         Logger.Warning("UserData", $"Failed to delete old UserData folder: {ex.Message}");
+                        // If we can't delete, don't try to create symlink
+                        return;
                     }
                 }
+            }
+            
+            // Double-check that path is clear before creating symlink
+            if (Directory.Exists(instanceUserDataPath) || File.Exists(instanceUserDataPath))
+            {
+                Logger.Warning("UserData", "UserData path still exists, skipping symlink creation");
+                return;
             }
             
             // Create the symlink
@@ -2686,8 +2787,8 @@ public class AppService : IDisposable
         try
         {
             var profilesDir = GetProfilesFolder();
-            // Use profile name as folder name (sanitize for filesystem)
-            var safeName = SanitizeFileName(profile.Name);
+            // Use FolderName if specified, otherwise use profile name (sanitize for filesystem)
+            var safeName = SanitizeFileName(profile.FolderName ?? profile.Name);
             var profileDir = Path.Combine(profilesDir, safeName);
             Directory.CreateDirectory(profileDir);
             
@@ -2714,6 +2815,43 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
             CopyProfileSkinData(profile.UUID, profileDir, profile);
             
             Logger.Info("Profile", $"Saved profile to disk: {profileDir}");
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Profile", $"Failed to save profile to disk: {ex.Message}");
+        }
+    }
+    
+    private void SaveProfileToDiskWithFolder(Profile profile, string folderName)
+    {
+        try
+        {
+            var profilesDir = GetProfilesFolder();
+            var safeName = SanitizeFileName(folderName);
+            var profileDir = Path.Combine(profilesDir, safeName);
+            Directory.CreateDirectory(profileDir);
+            
+            // Create UserData folder for this profile
+            var userDataPath = Path.Combine(profileDir, "UserData");
+            Directory.CreateDirectory(userDataPath);
+            
+            // Create the shell script with profile info
+            var shPath = Path.Combine(profileDir, $"{profile.Name}.sh");
+            var shContent = $@"#!/bin/bash
+# HyPrism Profile - {profile.Name}
+# Folder: {folderName}
+# Created: {profile.CreatedAt:yyyy-MM-dd HH:mm:ss}
+
+export HYPRISM_PROFILE_NAME=""{profile.Name}""
+export HYPRISM_PROFILE_UUID=""{profile.UUID}""
+export HYPRISM_PROFILE_ID=""{profile.Id}""
+
+# This file is auto-generated by HyPrism launcher
+# You can source this file to use this profile's settings
+";
+            File.WriteAllText(shPath, shContent);
+            
+            Logger.Info("Profile", $"Created profile folder: {profileDir}");
         }
         catch (Exception ex)
         {
@@ -8877,6 +9015,9 @@ rm -f ""$0""
                     var versionPath = ResolveInstancePath(branchName, version, preferExisting: true);
                     var userDataPath = Path.Combine(versionPath, "UserData");
                     
+                    // Ensure instance.json exists for this instance
+                    EnsureInstanceInfo(branchName, version);
+                    
                     long size = 0;
                     if (Directory.Exists(userDataPath))
                     {
@@ -8886,22 +9027,50 @@ rm -f ""$0""
                     // Load instance info for playtime and creation time
                     var instanceInfo = LoadInstanceInfo(branchName, version);
                     
+                    if (instanceInfo != null)
+                    {
+                        Logger.Info("Instance", $"Loaded instance info for {branchName}/{version}: Version={instanceInfo.Version}, Branch={instanceInfo.Branch}, IsLatest={instanceInfo.IsLatestInstance}");
+                    }
+                    else
+                    {
+                        Logger.Warning("Instance", $"Failed to load instance info for {branchName}/{version}, creating default");
+                        // Fallback: create default instance info
+                        instanceInfo = new InstanceInfo
+                        {
+                            Version = version,
+                            Branch = branchName,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow,
+                            IsLatestInstance = (version == 0),
+                            PlayTimeSeconds = 0
+                        };
+                    }
+                    
+                    // Use the branch from instance.json if available, otherwise fallback to folder-based branch
+                    var actualBranch = instanceInfo.Branch ?? branchName;
+                    
                     result.Add(new InstalledVersionInfo
                     {
-                        Version = version,
-                        Branch = branchName,
+                        Version = instanceInfo.Version,
+                        Branch = actualBranch,  // Use actual branch from instance.json
                         Path = versionPath,
                         UserDataSize = size,
                         HasUserData = Directory.Exists(userDataPath),
-                        CreatedAt = instanceInfo?.CreatedAt,
-                        PlayTimeSeconds = instanceInfo?.PlayTimeSeconds ?? 0,
-                        PlayTimeFormatted = instanceInfo?.GetFormattedPlayTime() ?? "00:00:00",
-                        IsPrerelease = instanceInfo?.IsPrerelease ?? (branchName == "pre-release"),
-                        IsRelease = instanceInfo?.IsRelease ?? (branchName == "release")
+                        CreatedAt = instanceInfo.CreatedAt,
+                        UpdatedAt = instanceInfo.UpdatedAt,
+                        IsLatestInstance = instanceInfo.IsLatestInstance,
+                        PlayTimeSeconds = instanceInfo.PlayTimeSeconds,
+                        PlayTimeFormatted = instanceInfo.GetFormattedPlayTime()
                     });
                 }
                 catch { }
             }
+        }
+        
+        Logger.Success("Instance", $"GetInstalledVersionsDetailed returning {result.Count} instances");
+        foreach (var inst in result)
+        {
+            Logger.Info("Instance", $"  -> Branch={inst.Branch}, Version={inst.Version}, IsLatest={inst.IsLatestInstance}, PlayTime={inst.PlayTimeSeconds}s ({inst.PlayTimeFormatted}), HasData={inst.HasUserData}");
         }
         
         return result.OrderByDescending(v => v.Version).ToList();
@@ -10002,6 +10171,7 @@ public class Profile
     public string Id { get; set; } = Guid.NewGuid().ToString();
     public string UUID { get; set; } = "";
     public string Name { get; set; } = "";
+    public string? FolderName { get; set; } = null;  // Custom folder name (if different from Name)
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
@@ -10318,8 +10488,8 @@ public class InstalledVersionInfo
     public long UserDataSize { get; set; }
     public bool HasUserData { get; set; }
     public DateTime? CreatedAt { get; set; }
+    public DateTime? UpdatedAt { get; set; }
+    public bool IsLatestInstance { get; set; }
     public long PlayTimeSeconds { get; set; }
     public string PlayTimeFormatted { get; set; } = "";
-    public bool IsPrerelease { get; set; } = false;
-    public bool IsRelease { get; set; } = true;
 }

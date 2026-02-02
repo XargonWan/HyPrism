@@ -34,6 +34,10 @@ export interface InstalledVersionInfo {
     HasUserData: boolean;
     /** When the instance was created */
     CreatedAt?: string;
+    /** When the instance was last updated */
+    UpdatedAt?: string;
+    /** Whether this is a "latest" instance that auto-updates */
+    IsLatestInstance: boolean;
     /** Total playtime in seconds */
     PlayTimeSeconds: number;
     /** Formatted playtime string (HH:MM:SS or Dd HH:MM:SS) */
@@ -50,6 +54,8 @@ export interface Profile {
     uuid: string;
     /** Display name */
     name: string;
+    /** Folder name (may differ from display name for duplicates) */
+    folderName?: string;
     /** Creation timestamp */
     createdAt: string;
 }
@@ -758,6 +764,13 @@ export const CreateProfile = (name: string, uuid: string) => callBackend<Profile
  * @param profileId - Profile ID to duplicate
  */
 export const DuplicateProfile = (profileId: string) => callBackend<Profile | null>('DuplicateProfile', profileId);
+
+/**
+ * Duplicates an existing profile without copying UserData folder
+ * Keeps the same UUID and name (with suffix) but fresh UserData
+ * @param profileId - Profile ID to duplicate
+ */
+export const DuplicateProfileWithoutData = (profileId: string) => callBackend<Profile | null>('DuplicateProfileWithoutData', profileId);
 
 /**
  * Deletes a profile

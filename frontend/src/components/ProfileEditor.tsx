@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, RefreshCw, Check, User, Edit3, Copy, CheckCircle, Plus, Trash2, Dices, FolderOpen } from 'lucide-react';
+import { X, RefreshCw, Check, User, Edit3, Copy, CheckCircle, Plus, Trash2, Dices, FolderOpen, CopyPlus } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccentColor } from '../contexts/AccentColorContext';
-import { GetUUID, SetUUID, GetNick, SetNick, GetAvatarPreview, GetAvatarPreviewForUUID, GetProfiles, CreateProfile, DeleteProfile, SwitchProfile, SaveCurrentAsProfile, OpenCurrentProfileFolder } from '@/api/backend';
+import { GetUUID, SetUUID, GetNick, SetNick, GetAvatarPreview, GetAvatarPreviewForUUID, GetProfiles, CreateProfile, DeleteProfile, SwitchProfile, SaveCurrentAsProfile, OpenCurrentProfileFolder, DuplicateProfileWithoutData, GetActiveProfileIndex } from '@/api/backend';
 import type { Profile } from '@/api/backend';
 import { DeleteProfileConfirmationModal } from './DeleteProfileConfirmationModal';
 
@@ -53,6 +53,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
     // Profile management state
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [profileAvatars, setProfileAvatars] = useState<Record<string, string | null>>({});
+    const [currentProfileIndex, setCurrentProfileIndex] = useState<number>(-1);
     
     // New profile creation flow - directly opens name editor
     const [isCreatingNewProfile, setIsCreatingNewProfile] = useState(false);
@@ -63,9 +64,13 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
     // Load profiles and their avatars
     const loadProfiles = useCallback(async () => {
         try {
-            const profileList = await GetProfiles();
-            console.log('[ProfileEditor] Loaded profiles:', JSON.stringify(profileList, null, 2));
+            const [profileList, activeIndex] = await Promise.all([
+                GetProfiles(),
+                GetActiveProfileIndex()
+            ]);
+            console.log('[ProfileEditor] Loaded profiles:', JSON.stringify(profileList, null, 2), 'Active index:', activeIndex);
             setProfiles(profileList || []);
+            setCurrentProfileIndex(activeIndex);
             
             // Load avatars for all profiles - explicitly set null for profiles without avatars
             const avatars: Record<string, string | null> = {};
@@ -290,6 +295,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
             setEditUsername(targetProfile.name);
             setUuid(targetProfile.uuid);
             setEditUuid(targetProfile.uuid);
+            setCurrentProfileIndex(actualIndex);
             
             // Pre-load the avatar for the target profile (use null if no avatar exists)
             const targetAvatar = profileAvatars[targetProfile.uuid];
@@ -312,6 +318,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                 // Revert on failure
                 await loadProfile();
                 await loadAvatar();
+                await loadProfiles(); // Also refresh current profile index
             }
         } catch (err) {
             console.error('Failed to switch profile:', err);
@@ -393,6 +400,21 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
         }
     };
 
+    const handleDuplicateProfile = async (profileId: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        try {
+            console.log('[ProfileEditor] Duplicating profile (without data):', profileId);
+            const newProfile = await DuplicateProfileWithoutData(profileId);
+            if (newProfile) {
+                console.log('[ProfileEditor] Duplicated profile:', newProfile);
+                await loadProfiles();
+                onProfileUpdate?.();
+            }
+        } catch (err) {
+            console.error('Failed to duplicate profile:', err);
+        }
+    };
+
     if (!isOpen) return null;
 
     return (
@@ -422,13 +444,17 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                                 console.log('[ProfileEditor] Rendering profiles:', JSON.stringify({
                                     total: profiles.length,
                                     filtered: filtered.length,
-                                    currentUUID: uuid,
+                                    currentProfileIndex,
                                     allProfiles: profiles,
                                     filteredProfiles: filtered
                                 }, null, 2));
-                                return filtered.map((profile) => {
-                                const isCurrentProfile = profile.uuid === uuid;
+                                return filtered.map((profile, displayIndex) => {
+                                // Find the actual index in the original profiles array
+                                const actualIndex = profiles.findIndex(p => p.id === profile.id);
+                                const isCurrentProfile = actualIndex === currentProfileIndex;
                                 const profileAvatar = profileAvatars[profile.uuid];
+                                // Check if this is a duplicate (folder name differs from display name)
+                                const isDuplicate = profile.folderName && profile.folderName !== profile.name;
                                 
                                 return (
                                     <div
@@ -464,9 +490,19 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                                             </div>
                                             <span className={`truncate ${isCurrentProfile ? 'font-medium' : ''}`}>
                                                 {profile.name || 'Unnamed'}
+                                                {isDuplicate && (
+                                                    <span className="text-white/30 text-xs ml-1">({profile.folderName?.replace(profile.name + ' ', '')})</span>
+                                                )}
                                             </span>
                                         </button>
                                         <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button
+                                                onClick={(e) => handleDuplicateProfile(profile.id, e)}
+                                                className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-all"
+                                                title={t('Duplicate Profile')}
+                                            >
+                                                <CopyPlus size={14} />
+                                            </button>
                                             {!isCurrentProfile && (
                                                 <button
                                                     onClick={(e) => handleDeleteProfile(profile.id, e)}

@@ -272,6 +272,7 @@ class Program
                         "GetActiveProfileIndex" => app.GetActiveProfileIndex(),
                         "CreateProfile" => app.CreateProfile(GetArg<string>(request.Args, 0), GetArg<string>(request.Args, 1)),
                         "DuplicateProfile" => app.DuplicateProfile(GetArg<string>(request.Args, 0)),
+                        "DuplicateProfileWithoutData" => app.DuplicateProfileWithoutData(GetArg<string>(request.Args, 0)),
                         "DeleteProfile" => app.DeleteProfile(GetArg<string>(request.Args, 0)),
                         "SwitchProfile" => app.SwitchProfile(GetArg<int>(request.Args, 0)),
                         "UpdateProfile" => app.UpdateProfile(GetArg<string>(request.Args, 0), GetArg<string>(request.Args, 1), GetArg<string>(request.Args, 2)),
