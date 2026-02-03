@@ -58,7 +58,7 @@
       "title": "Spracheinstellungen",
       "interfaceLanguage": "Sprache",
       "interfaceLanguageHint": "Wähle deine Sprache",
-      "note": ""
+      "note": "Hinweis: Einige Texte bleiben möglicherweise auf Englisch, bis die vollständige Lokalisierung abgeschlossen ist."
     }
   },
   "profileEditor": {

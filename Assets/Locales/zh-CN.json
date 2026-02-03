@@ -58,7 +58,7 @@
       "title": "语言设置",
       "interfaceLanguage": "界面语言",
       "interfaceLanguageHint": "选择语言",
-      "note": ""
+      "note": "注意：在完全本地化完成之前，某些文本可能会保留英语。"
     }
   },
   "profileEditor": {

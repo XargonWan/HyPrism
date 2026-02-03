@@ -58,7 +58,7 @@
       "title": "Idioma",
       "interfaceLanguage": "Idioma de Interfaz",
       "interfaceLanguageHint": "Elige tu idioma",
-      "note": ""
+      "note": "Nota: Algunos textos pueden permanecer en inglés hasta que se complete la localización."
     }
   },
   "profileEditor": {

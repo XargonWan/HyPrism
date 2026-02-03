@@ -58,7 +58,7 @@
       "title": "Langue",
       "interfaceLanguage": "Langue de l'interface",
       "interfaceLanguageHint": "Choisir la langue",
-      "note": ""
+      "note": "Remarque : Certains textes peuvent rester en anglais jusqu'à ce que la localisation complète soit terminée."
     }
   },
   "profileEditor": {

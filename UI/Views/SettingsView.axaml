@@ -287,7 +287,7 @@
                                 </inputs:SelectionInput>
                                 <TextBlock Text="{Binding LanguageInterfaceHint^}" FontSize="13" Foreground="Gray"/>
                                 
-                                <TextBlock Text="Note: Some text may remain in English until full localization is complete." 
+                                <TextBlock Text="{Binding LanguageNote^}" 
                                            FontSize="12" 
                                            Foreground="#888" 
                                            Margin="0,12,0,0"

@@ -58,7 +58,7 @@
       "title": "言語設定",
       "interfaceLanguage": "インターフェース言語",
       "interfaceLanguageHint": "言語を選択",
-      "note": ""
+      "note": "注：完全なローカライズが完了するまで、一部のテキストは英語のままになる場合があります。"
     }
   },
   "profileEditor": {

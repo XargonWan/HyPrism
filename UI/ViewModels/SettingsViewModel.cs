@@ -75,6 +75,7 @@ public class SettingsViewModel : ReactiveObject
     public IObservable<string> LanguageHeader { get; }
     public IObservable<string> LanguageInterface { get; }
     public IObservable<string> LanguageInterfaceHint { get; }
+    public IObservable<string> LanguageNote { get; }
 
     // Tabs
     private string _activeTab = "profile";
@@ -245,6 +246,7 @@ public class SettingsViewModel : ReactiveObject
         LanguageHeader = loc.GetObservable("settings.languageSettings.title");
         LanguageInterface = loc.GetObservable("settings.languageSettings.interfaceLanguage");
         LanguageInterfaceHint = loc.GetObservable("settings.languageSettings.interfaceLanguageHint");
+        LanguageNote = loc.GetObservable("settings.languageSettings.note");
 
         // Update branch items when language changes
         Observable.CombineLatest(
