@@ -5217,39 +5217,34 @@ export HYPRISM_PROFILE_ID=""{profile.Id}""
         try
         {
             // Download the installer
-            using var response = await HttpClient.GetAsync(VCRedistUrl, HttpCompletionOption.ResponseHeadersRead);
-            response.EnsureSuccessStatusCode();
-            
-            var totalBytes = response.Content.Headers.ContentLength ?? 0;
-            using var contentStream = await response.Content.ReadAsStreamAsync();
-            using var fileStream = new FileStream(installerPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
-            
-            var buffer = new byte[8192];
-            long downloadedBytes = 0;
-            int bytesRead;
-            
-            while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            using (var response = await HttpClient.GetAsync(VCRedistUrl, HttpCompletionOption.ResponseHeadersRead))
             {
-                await fileStream.WriteAsync(buffer, 0, bytesRead);
-                downloadedBytes += bytesRead;
+                response.EnsureSuccessStatusCode();
                 
-                if (totalBytes > 0)
+                using var contentStream = await response.Content.ReadAsStreamAsync();
+                using var fileStream = new FileStream(installerPath, FileMode.Create, FileAccess.Write, FileShare.Read, 8192, true);
+                
+                var buffer = new byte[8192];
+                int bytesRead;
+                
+                while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                 {
-                    int percent = (int)((downloadedBytes * 50) / totalBytes); // 0-50%
-                    progressCallback(percent, $"Downloading VC++ Redistributable... {percent * 2}%");
+                    await fileStream.WriteAsync(buffer, 0, bytesRead);
                 }
+                
+                await fileStream.FlushAsync();
             }
             
             Logger.Info("VCRedist", "Download complete, running installer...");
             progressCallback(50, "Installing Visual C++ Redistributable...");
             
-            // Run the installer silently
+            // Run the VC_Redis installer
             var startInfo = new ProcessStartInfo
             {
                 FileName = installerPath,
                 Arguments = "/install /quiet /norestart",
                 UseShellExecute = true,
-                Verb = "runas" // Request elevation
+                Verb = "runas"
             };
             
             using var process = Process.Start(startInfo);
