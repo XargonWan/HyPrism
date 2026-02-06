@@ -305,28 +305,34 @@ public class MyViewModel
 // ✅ ПРАВИЛЬНО
 public class MyViewModel : ReactiveObject
 {
-    [ObservableProperty]
     private string _buttonText = "Click me";
+    public string ButtonText
+    {
+        get => _buttonText;
+        set => this.RaiseAndSetIfChanged(ref _buttonText, value);
+    }
     
-    [RelayCommand]
+    public ReactiveCommand<Unit, Unit> ButtonClickCommand { get; }
+    
+    public MyViewModel()
+    {
+        ButtonClickCommand = ReactiveCommand.Create(OnButtonClick);
+    }
+    
     private void OnButtonClick() { }
 }
 ```
 
-### 3. Используйте Source Generators
+### 3. Используйте ReactiveUI паттерны
 
 ```csharp
-// Вместо ручного boilerplate
+// Объявление свойства с RaiseAndSetIfChanged
 private string _name;
 public string Name
 {
     get => _name;
     set => this.RaiseAndSetIfChanged(ref _name, value);
 }
-
-// Используйте
-[ObservableProperty]
-private string _name;
 ```
 
 ### 4. Сервисы через DI

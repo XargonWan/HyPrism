@@ -85,7 +85,7 @@ Open a PR to the official repository and fill out the template.
 ### MVVM
 
 - ViewModels **must not** reference Avalonia Controls
-- Use `[ObservableProperty]` and `[RelayCommand]`
+- Use `RaiseAndSetIfChanged` and `ReactiveCommand`
 - Get services via DI
 
 ### Styles

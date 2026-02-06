@@ -72,7 +72,7 @@ dotnet run
 | .NET | 10.0 (Preview) | Платформа |
 | Avalonia UI | 11.3.11 | UI Framework |
 | ReactiveUI | 11.3.9 | Реактивный MVVM |
-| CommunityToolkit.Mvvm | 8.4.0 | Source Generators |
+
 | SkiaSharp | 3.116.1 | Рендеринг графики |
 | Serilog | 4.3.0 | Логирование |
 

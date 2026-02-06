@@ -201,24 +201,27 @@ public class MyViewModel : ViewModelBase
 }
 
 // ✅ New code
-public partial class MyViewModel : ReactiveObject
+public class MyViewModel : ReactiveObject
 {
-    [ObservableProperty]
     private string _name;
+    public string Name
+    {
+        get => _name;
+        set => this.RaiseAndSetIfChanged(ref _name, value);
+    }
 }
 ```
 
 **Migration:**
 - Replace base class with `ReactiveObject`
-- Use `[ObservableProperty]` attributes
-- Add `partial` to class
+- Use `RaiseAndSetIfChanged` for property setters
 
 ---
 
 ### 8. Commands
 
 **Was:** Manual `ICommand` creation  
-**Now:** `[RelayCommand]` attribute
+**Now:** `ReactiveCommand`
 
 ```csharp
 // ❌ Old code
@@ -229,12 +232,15 @@ public MyViewModel()
 }
 
 // ✅ New code
-[RelayCommand]
+public ReactiveCommand<Unit, Unit> PlayCommand { get; }
+public MyViewModel()
+{
+    PlayCommand = ReactiveCommand.Create(Play);
+}
 private void Play()
 {
     // ...
 }
-// PlayCommand generated automatically
 ```
 
 ---

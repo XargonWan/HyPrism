@@ -197,7 +197,7 @@ HyPrism.app/
 | Avalonia | 11.3.11 |
 | Avalonia.Desktop | 11.3.11 |
 | ReactiveUI | 11.3.9 |
-| CommunityToolkit.Mvvm | 8.4.0 |
+
 | SkiaSharp | 3.116.1 |
 | Serilog | 4.3.0 |
 

@@ -73,22 +73,30 @@ public class MyViewModel
 }
 
 // ✅ ПРАВИЛЬНО
-public partial class MyViewModel : ReactiveObject
+public class MyViewModel : ReactiveObject
 {
-    [ObservableProperty]
     private string _buttonText;
+    public string ButtonText
+    {
+        get => _buttonText;
+        set => this.RaiseAndSetIfChanged(ref _buttonText, value);
+    }
     
-    [RelayCommand]
-    private void Play() { }
+    public ReactiveCommand<Unit, Unit> PlayCommand { get; }
+    
+    public MyViewModel()
+    {
+        PlayCommand = ReactiveCommand.Create(() => { });
+    }
 }
 ```
 
 #### Свойства
 
-Используйте `[ObservableProperty]` вместо boilerplate:
+Используйте `RaiseAndSetIfChanged` из ReactiveUI:
 
 ```csharp
-// ❌ НЕПРАВИЛЬНО (слишком много кода)
+// ❌ НЕПРАВИЛЬНО (ручная реализация INotifyPropertyChanged)
 private string _name;
 public string Name
 {
@@ -103,35 +111,56 @@ public string Name
     }
 }
 
-// ✅ ПРАВИЛЬНО
-[ObservableProperty]
+// ✅ ПРАВИЛЬНО (ReactiveUI)
 private string _name;
+public string Name
+{
+    get => _name;
+    set => this.RaiseAndSetIfChanged(ref _name, value);
+}
 ```
 
 #### Команды
 
-Используйте `[RelayCommand]`:
+Используйте `ReactiveCommand` из ReactiveUI:
 
 ```csharp
 // ✅ Синхронная команда
-[RelayCommand]
-private void Save()
+public ReactiveCommand<Unit, Unit> SaveCommand { get; }
+
+public MyViewModel(IConfigService configService)
 {
-    _configService.Save();
+    SaveCommand = ReactiveCommand.Create(() => configService.Save());
 }
 
 // ✅ Асинхронная команда
-[RelayCommand]
-private async Task LoadAsync()
+public ReactiveCommand<Unit, Unit> LoadCommand { get; }
+
+public MyViewModel(IService service)
 {
-    Data = await _service.LoadAsync();
+    LoadCommand = ReactiveCommand.CreateFromTask(async () =>
+    {
+        Data = await service.LoadAsync();
+    });
 }
 
 // ✅ С условием CanExecute
-[RelayCommand(CanExecute = nameof(CanSave))]
-private void Save() { }
+private string _name;
+public string Name
+{
+    get => _name;
+    set => this.RaiseAndSetIfChanged(ref _name, value);
+}
 
-private bool CanSave => !string.IsNullOrEmpty(Name);
+public ReactiveCommand<Unit, Unit> SaveCommand { get; }
+
+public MyViewModel()
+{
+    var canSave = this.WhenAnyValue(x => x.Name)
+        .Select(name => !string.IsNullOrEmpty(name));
+    
+    SaveCommand = ReactiveCommand.Create(() => { }, canSave);
+}
 ```
 
 ---
@@ -226,10 +255,14 @@ private async void Button_Click(object sender, RoutedEventArgs e)
 }
 
 // ✅ ПРАВИЛЬНО (логика в ViewModel)
-[RelayCommand]
-private async Task LoadDataAsync()
+public ReactiveCommand<Unit, Unit> LoadDataCommand { get; }
+
+public MyViewModel(IService service)
 {
-    Data = await _service.LoadAsync();
+    LoadDataCommand = ReactiveCommand.CreateFromTask(async () =>
+    {
+        Data = await service.LoadAsync();
+    });
 }
 ```
 

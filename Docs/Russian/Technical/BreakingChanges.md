@@ -201,24 +201,27 @@ public class MyViewModel : ViewModelBase
 }
 
 // ✅ Новый код
-public partial class MyViewModel : ReactiveObject
+public class MyViewModel : ReactiveObject
 {
-    [ObservableProperty]
     private string _name;
+    public string Name
+    {
+        get => _name;
+        set => this.RaiseAndSetIfChanged(ref _name, value);
+    }
 }
 ```
 
 **Миграция:**
 - Замените базовый класс на `ReactiveObject`
-- Используйте `[ObservableProperty]` атрибуты
-- Добавьте `partial` к классу
+- Используйте `RaiseAndSetIfChanged` для сеттеров
 
 ---
 
 ### 8. Команды
 
 **Было:** Ручное создание `ICommand`  
-**Стало:** `[RelayCommand]` атрибут
+**Стало:** `ReactiveCommand`
 
 ```csharp
 // ❌ Старый код
@@ -229,12 +232,15 @@ public MyViewModel()
 }
 
 // ✅ Новый код
-[RelayCommand]
+public ReactiveCommand<Unit, Unit> PlayCommand { get; }
+public MyViewModel()
+{
+    PlayCommand = ReactiveCommand.Create(Play);
+}
 private void Play()
 {
     // ...
 }
-// Генерируется PlayCommand автоматически
 ```
 
 ---

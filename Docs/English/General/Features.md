@@ -130,9 +130,12 @@ public class ModService
 
 ```csharp
 // DashboardViewModel
-[ObservableProperty] bool IsSettingsOpen;
-[ObservableProperty] bool IsProfileEditorOpen;
-[ObservableProperty] bool IsModManagerOpen;
+private bool _isSettingsOpen;
+public bool IsSettingsOpen
+{
+    get => _isSettingsOpen;
+    set => this.RaiseAndSetIfChanged(ref _isSettingsOpen, value);
+}
 ```
 
 ### Theming

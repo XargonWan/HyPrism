@@ -1,6 +1,6 @@
 # Паттерны MVVM в HyPrism
 
-> Руководство по паттернам Model-View-ViewModel в HyPrism с ReactiveUI и CommunityToolkit.Mvvm.
+> Руководство по паттернам Model-View-ViewModel в HyPrism с ReactiveUI.
 
 ---
 
@@ -34,8 +34,7 @@ HyPrism использует **MVVM** (Model-View-ViewModel) архитекту�
 ┌─────────────────────────────────────────────────────────────┐
 │                       ViewModel                             │
 │                   (ReactiveObject)                          │
-│    [ObservableProperty] string _status;                     │
-│    [RelayCommand] void Play() { }                           │
+│    RaiseAndSetIfChanged, ReactiveCommand, WhenAnyValue      │
 └────────────────────────┬────────────────────────────────────┘
                          │ Dependency Injection
                          ↓
@@ -92,17 +91,26 @@ XAML разметка с декларативными привязками:
 Логика представления с реактивными свойствами:
 
 ```csharp
-public partial class DashboardViewModel : ReactiveObject
+public class DashboardViewModel : ReactiveObject
 {
     private readonly GameSessionService _gameService;
     
-    [ObservableProperty]
     private string _welcomeMessage = "Welcome!";
-    
-    [RelayCommand]
-    private async Task PlayAsync()
+    public string WelcomeMessage
     {
-        await _gameService.LaunchAsync();
+        get => _welcomeMessage;
+        set => this.RaiseAndSetIfChanged(ref _welcomeMessage, value);
+    }
+    
+    public ReactiveCommand<Unit, Unit> PlayCommand { get; }
+    
+    public DashboardViewModel(GameSessionService gameService)
+    {
+        _gameService = gameService;
+        PlayCommand = ReactiveCommand.CreateFromTask(async () =>
+        {
+            await _gameService.LaunchAsync();
+        });
     }
 }
 ```
@@ -216,80 +224,6 @@ public MyViewModel()
 
 ---
 
-## 🧰 CommunityToolkit.Mvvm
-
-### Source Generators
-
-Генерация boilerplate кода через атрибуты:
-
-### [ObservableProperty]
-
-```csharp
-// Вместо этого:
-private string _name;
-public string Name
-{
-    get => _name;
-    set => this.RaiseAndSetIfChanged(ref _name, value);
-}
-
-// Пишем:
-[ObservableProperty]
-private string _name;
-```
-
-⚠️ **Важно:** Для работы с ReactiveUI нужно использовать `partial class` наследующий `ReactiveObject`.
-
-### [RelayCommand]
-
-```csharp
-// Вместо этого:
-public ICommand SaveCommand { get; }
-public MyViewModel()
-{
-    SaveCommand = new RelayCommand(Save);
-}
-private void Save() { }
-
-// Пишем:
-[RelayCommand]
-private void Save()
-{
-    _configService.Save();
-}
-
-// Асинхронная команда
-[RelayCommand]
-private async Task LoadAsync()
-{
-    Data = await _service.LoadAsync();
-}
-
-// С условием CanExecute
-[RelayCommand(CanExecute = nameof(CanSave))]
-private void Save() { }
-
-private bool CanSave => !string.IsNullOrEmpty(Name);
-```
-
-### [NotifyPropertyChangedFor]
-
-Уведомление зависимых свойств:
-
-```csharp
-[ObservableProperty]
-[NotifyPropertyChangedFor(nameof(FullName))]
-private string _firstName;
-
-[ObservableProperty]
-[NotifyPropertyChangedFor(nameof(FullName))]
-private string _lastName;
-
-public string FullName => $"{FirstName} {LastName}";
-```
-
----
-
 ## 💉 Dependency Injection
 
 ### Регистрация в Bootstrapper
@@ -396,14 +330,18 @@ var optional = App.Current.Services!.GetService<OptionalService>();
 ### MainViewModel + Дочерние ViewModel
 
 ```csharp
-public partial class MainViewModel : ReactiveObject
+public class MainViewModel : ReactiveObject
 {
     // Дочерние ViewModel
     public LoadingViewModel LoadingVm { get; }
     public DashboardViewModel DashboardVm { get; }
     
-    [ObservableProperty]
     private bool _isLoading = true;
+    public bool IsLoading
+    {
+        get => _isLoading;
+        set => this.RaiseAndSetIfChanged(ref _isLoading, value);
+    }
     
     public MainViewModel(
         LoadingViewModel loadingVm,
@@ -439,19 +377,30 @@ public partial class MainViewModel : ReactiveObject
 ### Overlay Pattern
 
 ```csharp
-public partial class DashboardViewModel : ReactiveObject
+public class DashboardViewModel : ReactiveObject
 {
-    [ObservableProperty]
     private bool _isSettingsOpen;
+    public bool IsSettingsOpen
+    {
+        get => _isSettingsOpen;
+        set => this.RaiseAndSetIfChanged(ref _isSettingsOpen, value);
+    }
     
-    [ObservableProperty]
     private bool _isProfileEditorOpen;
+    public bool IsProfileEditorOpen
+    {
+        get => _isProfileEditorOpen;
+        set => this.RaiseAndSetIfChanged(ref _isProfileEditorOpen, value);
+    }
     
-    [RelayCommand]
-    private void OpenSettings() => IsSettingsOpen = true;
+    public ReactiveCommand<Unit, Unit> OpenSettingsCommand { get; }
+    public ReactiveCommand<Unit, Unit> CloseSettingsCommand { get; }
     
-    [RelayCommand]
-    private void CloseSettings() => IsSettingsOpen = false;
+    public DashboardViewModel()
+    {
+        OpenSettingsCommand = ReactiveCommand.Create(() => IsSettingsOpen = true);
+        CloseSettingsCommand = ReactiveCommand.Create(() => IsSettingsOpen = false);
+    }
 }
 ```
 
@@ -489,11 +438,19 @@ public class MyViewModel
 // ПРАВИЛЬНО
 public class MyViewModel : ReactiveObject
 {
-    [ObservableProperty]
     private string _buttonText;
+    public string ButtonText
+    {
+        get => _buttonText;
+        set => this.RaiseAndSetIfChanged(ref _buttonText, value);
+    }
     
-    [RelayCommand]
-    private void Play() { }
+    public ReactiveCommand<Unit, Unit> PlayCommand { get; }
+    
+    public MyViewModel()
+    {
+        PlayCommand = ReactiveCommand.Create(() => { });
+    }
 }
 ```
 
@@ -512,11 +469,15 @@ private async void Button_Click(object sender, RoutedEventArgs e)
 
 ```csharp
 // ПРАВИЛЬНО
-[RelayCommand]
-private async Task LoadDataAsync()
+public ReactiveCommand<Unit, Unit> LoadDataCommand { get; }
+
+public MyViewModel(IDataService dataService, IProcessor processor)
 {
-    var data = await _dataService.LoadAsync();
-    _processor.Process(data);
+    LoadDataCommand = ReactiveCommand.CreateFromTask(async () =>
+    {
+        var data = await dataService.LoadAsync();
+        processor.Process(data);
+    });
 }
 ```
 
@@ -577,6 +538,5 @@ public MyViewModel(MyService service)
 ## 📚 Дополнительные ресурсы
 
 - [ReactiveUI Documentation](https://www.reactiveui.net/)
-- [CommunityToolkit.Mvvm](https://learn.microsoft.com/en-us/dotnet/communitytoolkit/mvvm/)
 - [Avalonia Data Binding](https://docs.avaloniaui.net/docs/data-binding/)
 - [UIComponentGuide.md](UIComponentGuide.md) — Создание компонентов

@@ -85,7 +85,7 @@ git push origin feat/my-new-feature
 ### MVVM
 
 - ViewModels **не** должны ссылаться на Avalonia Controls
-- Используйте `[ObservableProperty]` и `[RelayCommand]`
+- Используйте `RaiseAndSetIfChanged` и `ReactiveCommand`
 - Получайте сервисы через DI
 
 ### Стили

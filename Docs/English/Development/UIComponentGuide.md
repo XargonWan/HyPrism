@@ -447,7 +447,13 @@ private void Button_Click(object sender, RoutedEventArgs e)
 
 ```csharp
 // CORRECT
-[RelayCommand]
+public ReactiveCommand<Unit, Unit> LoadDataCommand { get; }
+
+public MyViewModel()
+{
+    LoadDataCommand = ReactiveCommand.CreateFromTask(LoadDataAsync);
+}
+
 private async Task LoadDataAsync()
 {
     IsLoading = true;

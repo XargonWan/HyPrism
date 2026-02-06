@@ -69,8 +69,8 @@ graph TD
 **Расположение:** `UI/Views/*/`, `UI/MainWindow/`, `UI/Components/*/`
 
 ViewModels наследуют `ReactiveObject` и используют:
-- `[ObservableProperty]` — реактивные свойства
-- `[RelayCommand]` — команды для UI
+- `RaiseAndSetIfChanged` — реактивные свойства
+- `ReactiveCommand` — команды для UI
 - `WhenAnyValue` — реактивные подписки
 - `ObservableAsPropertyHelper` — вычисляемые свойства
 
@@ -181,7 +181,6 @@ public DashboardViewModel(
 |------------|--------|------------|
 | **Avalonia** | 11.3.11 | UI Framework |
 | **ReactiveUI** | 11.3.9 | Reactive MVVM |
-| **CommunityToolkit.Mvvm** | 8.4.0 | Source Generators |
 | **SkiaSharp** | 3.116.1 | Рендеринг графики |
 | **Serilog** | 4.3.0 | Логирование |
 | **Newtonsoft.Json** | 13.0.3 | JSON сериализация |

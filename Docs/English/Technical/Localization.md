@@ -137,8 +137,12 @@ public class LocalizationService : ReactiveObject
 ```csharp
 public class MyViewModel : ReactiveObject
 {
-    [ObservableProperty]
-    private string _playButtonText;
+    private string _playButtonText = "";
+    public string PlayButtonText
+    {
+        get => _playButtonText;
+        set => this.RaiseAndSetIfChanged(ref _playButtonText, value);
+    }
     
     public MyViewModel()
     {
