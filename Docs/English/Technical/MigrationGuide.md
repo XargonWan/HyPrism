@@ -48,18 +48,18 @@
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    Photino Window                    │
+│                    Photino Window                   │
 ├─────────────────────────────────────────────────────┤
 │  ┌─────────────────────────────────────────────┐    │
-│  │           WebKit Browser Engine              │    │
+│  │           WebKit Browser Engine             │    │
 │  │  ┌───────────────────────────────────────┐  │    │
 │  │  │     HTML/CSS/TypeScript Frontend      │  │    │
 │  │  │  (React-like components, SPA routing) │  │    │
 │  │  └───────────────────────────────────────┘  │    │
 │  └─────────────────────────────────────────────┘    │
-│                        ↕ IPC Bridge                  │
+│                        ↕ IPC Bridge                 │
 │  ┌─────────────────────────────────────────────┐    │
-│  │              C# Backend (AppService)         │    │
+│  │              C# Backend (AppService)        │    │
 │  │    (Monolithic god-object with all logic)   │    │
 │  └─────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────┘
@@ -75,20 +75,20 @@
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                   Avalonia Window                    │
+│                   Avalonia Window                   │
 ├─────────────────────────────────────────────────────┤
 │  ┌─────────────────────────────────────────────┐    │
-│  │              Views (XAML)                    │    │
-│  │         Pure declarative UI markup           │    │
+│  │              Views (XAML)                    │   │
+│  │         Pure declarative UI markup           │   │
 │  └───────────────────┬─────────────────────────┘    │
-│                      ↕ Data Binding                  │
+│                      ↕ Data Binding                 │
 │  ┌─────────────────────────────────────────────┐    │
-│  │            ViewModels (ReactiveUI)           │    │
-│  │      ObservableProperties + Commands         │    │
+│  │            ViewModels (ReactiveUI)          │    │
+│  │      ObservableProperties + Commands        │    │
 │  └───────────────────┬─────────────────────────┘    │
 │                      ↓ DI                           │
 │  ┌─────────────────────────────────────────────┐    │
-│  │         Services (Single Responsibility)     │    │
+│  │         Services (Single Responsibility)    │    │
 │  │   GameSessionService, ConfigService, etc.   │    │
 │  └─────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────┘
