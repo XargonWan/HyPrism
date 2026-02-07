@@ -2,12 +2,22 @@ using Serilog;
 
 namespace HyPrism.Services.Core;
 
+/// <summary>
+/// Provides centralized logging functionality with console output and in-memory buffer.
+/// Wraps Serilog for file logging while providing colored console output and recent log retrieval.
+/// </summary>
 public static class Logger
 {
     private static readonly object _lock = new();
     private static readonly Queue<string> _logBuffer = new();
     private const int MaxLogEntries = 100;
     
+    /// <summary>
+    /// Logs an informational message.
+    /// </summary>
+    /// <param name="category">The log category or source context (e.g., "Download", "Config").</param>
+    /// <param name="message">The message to log.</param>
+    /// <param name="logToConsole">Whether to also output to console. Defaults to <c>true</c>.</param>
     public static void Info(string category, string message, bool logToConsole = true)
     {
         Log.ForContext("SourceContext", category).Information(message);
@@ -18,6 +28,12 @@ public static class Logger
         }
     }
     
+    /// <summary>
+    /// Logs a success message (displayed in green in console).
+    /// </summary>
+    /// <param name="category">The log category or source context.</param>
+    /// <param name="message">The success message to log.</param>
+    /// <param name="logToConsole">Whether to also output to console. Defaults to <c>true</c>.</param>
     public static void Success(string category, string message, bool logToConsole = true)
     {
         Log.ForContext("SourceContext", category).Information($"SUCCESS: {message}");
@@ -28,6 +44,12 @@ public static class Logger
         }
     }
     
+    /// <summary>
+    /// Logs a warning message (displayed in yellow in console).
+    /// </summary>
+    /// <param name="category">The log category or source context.</param>
+    /// <param name="message">The warning message to log.</param>
+    /// <param name="logToConsole">Whether to also output to console. Defaults to <c>true</c>.</param>
     public static void Warning(string category, string message, bool logToConsole = true)
     {
         Log.ForContext("SourceContext", category).Warning(message);
@@ -38,6 +60,12 @@ public static class Logger
         }
     }
     
+    /// <summary>
+    /// Logs an error message (displayed in red in console).
+    /// </summary>
+    /// <param name="category">The log category or source context.</param>
+    /// <param name="message">The error message to log.</param>
+    /// <param name="logToConsole">Whether to also output to console. Defaults to <c>true</c>.</param>
     public static void Error(string category, string message, bool logToConsole = true)
     {
         Log.ForContext("SourceContext", category).Error(message);
@@ -48,6 +76,11 @@ public static class Logger
         }
     }
     
+    /// <summary>
+    /// Logs a debug message. Only outputs in DEBUG builds.
+    /// </summary>
+    /// <param name="category">The log category or source context.</param>
+    /// <param name="message">The debug message to log.</param>
     public static void Debug(string category, string message)
     {
 #if DEBUG
@@ -57,6 +90,11 @@ public static class Logger
 #endif
     }
     
+    /// <summary>
+    /// Retrieves the most recent log entries from the in-memory buffer.
+    /// </summary>
+    /// <param name="count">The maximum number of entries to retrieve. Defaults to 10.</param>
+    /// <returns>A list of formatted log entries, newest last.</returns>
     public static List<string> GetRecentLogs(int count = 10)
     {
         lock (_lock)
@@ -72,6 +110,13 @@ public static class Logger
         }
     }
     
+    /// <summary>
+    /// Writes a formatted log entry to the console with color coding.
+    /// </summary>
+    /// <param name="level">The log level abbreviation (e.g., "INF", "ERR").</param>
+    /// <param name="category">The log category.</param>
+    /// <param name="message">The message to display.</param>
+    /// <param name="color">The console color for the level indicator.</param>
     private static void WriteToConsole(string level, string category, string message, ConsoleColor color)
     {
         lock (_lock)
@@ -95,6 +140,12 @@ public static class Logger
         }
     }
 
+    /// <summary>
+    /// Adds a log entry to the in-memory circular buffer.
+    /// </summary>
+    /// <param name="level">The log level abbreviation.</param>
+    /// <param name="category">The log category.</param>
+    /// <param name="message">The message to buffer.</param>
     private static void AddToBuffer(string level, string category, string message)
     {
         lock (_lock)
@@ -110,6 +161,13 @@ public static class Logger
         }
     }
 
+    /// <summary>
+    /// Displays a progress bar in the console for long-running operations.
+    /// Uses carriage return to update in place.
+    /// </summary>
+    /// <param name="category">The operation category label.</param>
+    /// <param name="percent">The progress percentage (0-100).</param>
+    /// <param name="message">The status message to display.</param>
     public static void Progress(string category, int percent, string message)
     {
         lock (_lock)
@@ -129,6 +187,12 @@ public static class Logger
     }
 
     
+    /// <summary>
+    /// Generates an ASCII progress bar string.
+    /// </summary>
+    /// <param name="percent">The progress percentage (0-100).</param>
+    /// <param name="width">The width of the progress bar in characters.</param>
+    /// <returns>A string representing the progress bar (e.g., "====------").</returns>
     private static string ProgressBar(int percent, int width)
     {
         int filled = (int)(percent / 100.0 * width);

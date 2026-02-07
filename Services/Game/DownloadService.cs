@@ -3,20 +3,23 @@ using HyPrism.Services.Core;
 namespace HyPrism.Services.Game;
 
 /// <summary>
-/// Service for handling file downloads with progress tracking.
+/// Provides file download functionality with progress tracking and resume support.
+/// Used for downloading game files, patches, and other assets.
 /// </summary>
 public class DownloadService : IDownloadService
 {
     private readonly HttpClient _httpClient;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DownloadService"/> class.
+    /// </summary>
+    /// <param name="httpClient">The HTTP client for downloading files.</param>
     public DownloadService(HttpClient httpClient)
     {
         _httpClient = httpClient;
     }
 
-    /// <summary>
-    /// Download a file with progress reporting and resume support.
-    /// </summary>
+    /// <inheritdoc/>
     public async Task DownloadFileAsync(
         string url, 
         string destinationPath, 

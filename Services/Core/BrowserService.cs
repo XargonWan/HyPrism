@@ -5,13 +5,16 @@ using System.Threading.Tasks;
 namespace HyPrism.Services.Core;
 
 /// <summary>
-/// Service responsible for opening URLs in the default browser.
+/// Service responsible for opening URLs in the default system browser.
+/// Supports Windows, macOS, and Linux platforms with appropriate launch mechanisms.
 /// </summary>
 public class BrowserService : IBrowserService
 {
     /// <summary>
     /// Opens the specified URL in the default browser.
     /// </summary>
+    /// <param name="url">The URL to open. Must start with http:// or https://.</param>
+    /// <returns><c>true</c> if the browser was launched successfully; otherwise, <c>false</c>.</returns>
     public bool OpenURL(string url)
     {
         try

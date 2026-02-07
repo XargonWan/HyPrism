@@ -17,6 +17,14 @@ public class ProfileManagementService : IProfileManagementService
     private readonly InstanceService _instanceService;
     private readonly UserIdentityService _userIdentityService;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ProfileManagementService"/> class.
+    /// </summary>
+    /// <param name="appPath">The application path configuration.</param>
+    /// <param name="configService">The configuration service.</param>
+    /// <param name="skinService">The skin management service.</param>
+    /// <param name="instanceService">The game instance service.</param>
+    /// <param name="userIdentityService">The user identity service.</param>
     public ProfileManagementService(
         AppPathConfiguration appPath,
         ConfigService configService,
@@ -31,9 +39,8 @@ public class ProfileManagementService : IProfileManagementService
         _userIdentityService = userIdentityService;
     }
 
-    /// <summary>
-    /// Gets all saved profiles, filtering out any with null/empty names.
-    /// </summary>
+    /// <inheritdoc/>
+    /// <remarks>Filters out any profiles with null/empty names or UUIDs.</remarks>
     public List<Profile> GetProfiles()
     {
         var config = _configService.Configuration;
@@ -57,19 +64,15 @@ public class ProfileManagementService : IProfileManagementService
         Logger.Info("Profile", $"GetProfiles returning {profiles.Count} profiles");
         return profiles;
     }
-    
-    /// <summary>
-    /// Gets the currently active profile index. -1 means no profile selected.
-    /// </summary>
+
+    /// <inheritdoc/>
     public int GetActiveProfileIndex()
     {
         return _configService.Configuration.ActiveProfileIndex;
     }
-    
-    /// <summary>
-    /// Creates a new profile with the given name and UUID.
-    /// Returns the created profile.
-    /// </summary>
+
+    /// <inheritdoc/>
+    /// <remarks>Validates name length (1-16 characters) and UUID format before creation.</remarks>
     public Profile? CreateProfile(string name, string uuid)
     {
         try
@@ -122,11 +125,9 @@ public class ProfileManagementService : IProfileManagementService
             return null;
         }
     }
-    
-    /// <summary>
-    /// Deletes a profile by its ID.
-    /// Returns true if successful.
-    /// </summary>
+
+    /// <inheritdoc/>
+    /// <remarks>Adjusts active profile index if needed after deletion.</remarks>
     public bool DeleteProfile(string profileId)
     {
         try
@@ -170,11 +171,9 @@ public class ProfileManagementService : IProfileManagementService
             return false;
         }
     }
-    
-    /// <summary>
-    /// Switches to a profile by its index.
-    /// Returns true if successful.
-    /// </summary>
+
+    /// <inheritdoc/>
+    /// <remarks>Backups current profile's skin data and restores the new profile's skin data.</remarks>
     public bool SwitchProfile(int index)
     {
         try
@@ -220,10 +219,8 @@ public class ProfileManagementService : IProfileManagementService
             return false;
         }
     }
-    
-    /// <summary>
-    /// Updates an existing profile.
-    /// </summary>
+
+    /// <inheritdoc/>
     public bool UpdateProfile(string profileId, string? newName, string? newUuid)
     {
         try
@@ -267,11 +264,9 @@ public class ProfileManagementService : IProfileManagementService
             return false;
         }
     }
-    
-    /// <summary>
-    /// Saves the current UUID/Nick as a new profile.
-    /// Returns the created profile.
-    /// </summary>
+
+    /// <inheritdoc/>
+    /// <remarks>Updates existing profile if UUID already exists, otherwise creates new.</remarks>
     public Profile? SaveCurrentAsProfile()
     {
         var config = _configService.Configuration;
@@ -297,11 +292,9 @@ public class ProfileManagementService : IProfileManagementService
         // Create new profile
         return CreateProfile(name, uuid);
     }
-    
-    /// <summary>
-    /// Duplicates an existing profile (copies UserData folder too).
-    /// Returns the newly created profile.
-    /// </summary>
+
+    /// <inheritdoc/>
+    /// <remarks>Copies UserData folder, mods folder, and skin data from the source profile.</remarks>
     public Profile? DuplicateProfile(string profileId)
     {
         try
@@ -428,12 +421,9 @@ public class ProfileManagementService : IProfileManagementService
             return null;
         }
     }
-    
-    /// <summary>
-    /// Duplicates an existing profile WITHOUT copying UserData folder.
-    /// Only copies settings, mods, and skin/avatar.
-    /// Returns the newly created profile.
-    /// </summary>
+
+    /// <inheritdoc/>
+    /// <remarks>Copies mods and skin/avatar but NOT UserData folder.</remarks>
     public Profile? DuplicateProfileWithoutData(string profileId)
     {
         try
@@ -532,10 +522,8 @@ public class ProfileManagementService : IProfileManagementService
             return null;
         }
     }
-    
-    /// <summary>
-    /// Opens the current active profile's folder in the file manager.
-    /// </summary>
+
+    /// <inheritdoc/>
     public bool OpenCurrentProfileFolder()
     {
         try
@@ -583,10 +571,7 @@ public class ProfileManagementService : IProfileManagementService
         }
     }
 
-    
-    /// <summary>
-    /// Initializes the profile mods symlink on startup if an active profile exists.
-    /// </summary>
+    /// <inheritdoc/>
     public void InitializeProfileModsSymlink()
     {
         try
@@ -645,17 +630,15 @@ public class ProfileManagementService : IProfileManagementService
             Logger.Warning("Mods", $"Failed to initialize profile mods symlink: {ex.Message}");
         }
     }
-    
-    /// <summary>
-    /// Gets the path to the Profiles folder.
-    /// </summary>
+
+    /// <inheritdoc/>
     public string GetProfilesFolder()
     {
         var profilesDir = Path.Combine(_appDir, "Profiles");
         Directory.CreateDirectory(profilesDir);
         return profilesDir;
     }
-    
+
     // ========== Private Helper Methods ==========
     
     /// <summary>

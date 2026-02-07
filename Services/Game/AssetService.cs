@@ -8,8 +8,13 @@ using HyPrism.Models;
 namespace HyPrism.Services.Game;
 
 /// <summary>
-/// Service responsible for managing game assets, including Assets.zip and cosmetics.
+/// Manages game asset files including Assets.zip extraction and cosmetic item parsing.
+/// Handles reading cosmetic definitions from the game's asset archive.
 /// </summary>
+/// <remarks>
+/// Cosmetics are parsed from JSON files within Assets.zip and mapped to
+/// category names used by the authentication server.
+/// </remarks>
 public class AssetService
 {
     private readonly InstanceService _instanceService;
@@ -46,6 +51,11 @@ public class AssetService
         { "Underwear.json", "underwear" }
     };
     
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AssetService"/> class.
+    /// </summary>
+    /// <param name="instanceService">The instance service for path resolution.</param>
+    /// <param name="appDir">The application data directory path.</param>
     public AssetService(InstanceService instanceService, string appDir)
     {
         _instanceService = instanceService;
@@ -55,6 +65,8 @@ public class AssetService
     /// <summary>
     /// Checks if Assets.zip exists for the specified instance.
     /// </summary>
+    /// <param name="versionPath">The path to the game version directory.</param>
+    /// <returns><c>true</c> if Assets.zip exists; otherwise, <c>false</c>.</returns>
     public bool HasAssetsZip(string versionPath)
     {
         var assetsZipPath = GetAssetsZipPath(versionPath);
@@ -64,8 +76,10 @@ public class AssetService
     }
     
     /// <summary>
-    /// Gets the path to Assets.zip if it exists, or null if not found.
+    /// Gets the path to Assets.zip if it exists.
     /// </summary>
+    /// <param name="versionPath">The path to the game version directory.</param>
+    /// <returns>The path to Assets.zip if it exists; otherwise, <c>null</c>.</returns>
     public string? GetAssetsZipPathIfExists(string versionPath)
     {
         var assetsZipPath = GetAssetsZipPath(versionPath);

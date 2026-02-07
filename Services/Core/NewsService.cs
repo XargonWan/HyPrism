@@ -10,22 +10,32 @@ using HyPrism.Models;
 
 namespace HyPrism.Services.Core;
 
+/// <summary>
+/// Defines the source of news items.
+/// </summary>
 public enum NewsSource
 {
+    /// <summary>Fetch news from all sources.</summary>
     All,
+    /// <summary>Fetch news from Hytale official blog only.</summary>
     Hytale,
+    /// <summary>Fetch news from HyPrism GitHub releases only.</summary>
     HyPrism
 }
 
 /// <summary>
-/// Fetches news from Hytale API and HyPrism GitHub Releases
+/// Fetches and aggregates news from Hytale's official blog API and HyPrism GitHub Releases.
+/// Implements caching to reduce API calls and handle rate limits.
 /// </summary>
 public class NewsService : INewsService
 {
     private readonly HttpClient _httpClient;
     private readonly string _appIconPath = "avares://HyPrism/Assets/logo.png";
 
-    // DI Constructor
+    /// <summary>
+    /// Initializes a new instance of the <see cref="NewsService"/> class.
+    /// </summary>
+    /// <param name="httpClient">The HTTP client for fetching news.</param>
     public NewsService(HttpClient httpClient)
     {
         _httpClient = httpClient;

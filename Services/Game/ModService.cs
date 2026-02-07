@@ -6,9 +6,13 @@ using System.Text.RegularExpressions;
 namespace HyPrism.Services.Game;
 
 /// <summary>
-/// Service for managing mods - searching, installing, updating, and managing mod lists.
-/// Stubs for future rewrite.
+/// Manages game modifications including searching, installing, updating, and tracking.
+/// Currently contains stubs pending a complete rewrite for proper mod support.
 /// </summary>
+/// <remarks>
+/// The mod system is designed to integrate with CurseForge and handle mod dependencies.
+/// Current implementation is disabled pending backend changes.
+/// </remarks>
 public class ModService : IModService
 {
     private readonly HttpClient _httpClient;
@@ -24,6 +28,14 @@ public class ModService : IModService
     private readonly InstanceService _instanceService;
     private readonly ProgressNotificationService _progressNotificationService;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ModService"/> class.
+    /// </summary>
+    /// <param name="httpClient">The HTTP client for API requests.</param>
+    /// <param name="appDir">The application data directory path.</param>
+    /// <param name="configService">The configuration service.</param>
+    /// <param name="instanceService">The instance management service.</param>
+    /// <param name="progressNotificationService">The progress notification service.</param>
     public ModService(
         HttpClient httpClient, 
         string appDir,
@@ -38,9 +50,8 @@ public class ModService : IModService
         _progressNotificationService = progressNotificationService;
     }
     
-    /// <summary>
-    /// Search stub.
-    /// </summary>
+    /// <inheritdoc/>
+    /// <remarks>Currently disabled pending mod system rewrite.</remarks>
     public async Task<ModSearchResult> SearchModsAsync(string query, int page, int pageSize, string[] categories, int sortField, int sortOrder)
     {
         Logger.Warning("ModService", "Search disabled pending rewrite.");
@@ -51,6 +62,7 @@ public class ModService : IModService
         });
     }
 
+    /// <inheritdoc/>
     public async Task<List<ModCategory>> GetModCategoriesAsync()
     {
         return await Task.FromResult(new List<ModCategory>
@@ -62,15 +74,15 @@ public class ModService : IModService
         });
     }
 
-    /// <summary>
-    /// Install stub.
-    /// </summary>
+    /// <inheritdoc/>
+    /// <remarks>Currently disabled pending mod system rewrite.</remarks>
     public async Task<bool> InstallModFileToInstanceAsync(string slugOrId, string fileIdOrVersion, string instancePath, Action<string, string>? onProgress = null)
     {
         Logger.Warning("ModService", "Installation disabled pending rewrite.");
         return await Task.FromResult(false);
     }
 
+    /// <inheritdoc/>
     public List<InstalledMod> GetInstanceInstalledMods(string instancePath)
     {
         var modsPath = Path.Combine(instancePath, "Client", "mods");
@@ -89,6 +101,7 @@ public class ModService : IModService
         }
     }
     
+    /// <inheritdoc/>
     public async Task SaveInstanceModsAsync(string instancePath, List<InstalledMod> mods)
     {
         await _modManifestLock.WaitAsync();

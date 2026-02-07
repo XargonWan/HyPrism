@@ -5,13 +5,22 @@ namespace HyPrism.Services.Game;
 
 /// <summary>
 /// Manages game language settings and localization file operations.
-/// Handles copying language files to game instances and language code mapping.
+/// Handles copying translated language files to game instances and language code mapping.
 /// </summary>
+/// <remarks>
+/// Maps launcher locale codes (e.g., "en-US") to game locale directories.
+/// Translation files are copied to the game's language folder for in-game localization.
+/// </remarks>
 public class LanguageService
 {
     private readonly VersionService _versionService;
     private readonly InstanceService _instanceService;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LanguageService"/> class.
+    /// </summary>
+    /// <param name="versionService">The version service for version management.</param>
+    /// <param name="instanceService">The instance service for path resolution.</param>
     public LanguageService(
         VersionService versionService,
         InstanceService instanceService)
@@ -20,6 +29,11 @@ public class LanguageService
         _instanceService = instanceService;
     }
 
+    /// <summary>
+    /// Gets the path to the latest game instance for the specified branch.
+    /// </summary>
+    /// <param name="branch">The game branch (release or pre-release).</param>
+    /// <returns>The path to the latest instance directory.</returns>
     private string GetLatestInstancePath(string branch)
     {
         var info = _instanceService.LoadLatestInfo(branch);

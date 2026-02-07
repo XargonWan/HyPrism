@@ -4,8 +4,12 @@ namespace HyPrism.Services.Game;
 
 /// <summary>
 /// Manages differential game updates by downloading and applying Butler PWR patches.
-/// Extracted from the former monolithic GameSessionService.
+/// Handles the patch sequence calculation and applies patches incrementally.
 /// </summary>
+/// <remarks>
+/// Extracted from the former monolithic GameSessionService for better separation of concerns.
+/// Works with the Butler tool to apply binary patches efficiently.
+/// </remarks>
 public class PatchManager : IPatchManager
 {
     private readonly IVersionService _versionService;
@@ -16,6 +20,16 @@ public class PatchManager : IPatchManager
     private readonly HttpClient _httpClient;
     private readonly string _appDir;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PatchManager"/> class.
+    /// </summary>
+    /// <param name="versionService">Service for version management and patch sequence calculation.</param>
+    /// <param name="butlerService">Service for Butler patch tool operations.</param>
+    /// <param name="downloadService">Service for downloading patch files.</param>
+    /// <param name="instanceService">Service for managing game instances.</param>
+    /// <param name="progressService">Service for reporting progress notifications.</param>
+    /// <param name="httpClient">HTTP client for network operations.</param>
+    /// <param name="appPath">Application path configuration.</param>
     public PatchManager(
         IVersionService versionService,
         IButlerService butlerService,
@@ -34,6 +48,7 @@ public class PatchManager : IPatchManager
         _appDir = appPath.AppDir;
     }
 
+    /// <inheritdoc/>
     public async Task ApplyDifferentialUpdateAsync(
         string versionPath,
         string branch,

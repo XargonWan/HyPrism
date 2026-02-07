@@ -6,14 +6,25 @@ using HyPrism.Services.Core;
 namespace HyPrism.Services.Game;
 
 /// <summary>
-/// Service for managing game versions, checking updates, and version caching.
+/// Manages game version detection, update checking, and version caching.
+/// Queries the Hytale patch server to determine available versions.
 /// </summary>
+/// <remarks>
+/// Version information is cached to avoid excessive network requests.
+/// Uses parallel batch checking for efficient version discovery.
+/// </remarks>
 public class VersionService : IVersionService
 {
     private readonly string _appDir;
     private readonly HttpClient _httpClient;
     private readonly IConfigService _configService;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="VersionService"/> class.
+    /// </summary>
+    /// <param name="appDir">The application data directory for storing cache files.</param>
+    /// <param name="httpClient">The HTTP client for API requests.</param>
+    /// <param name="configService">The configuration service for accessing settings.</param>
     public VersionService(string appDir, HttpClient httpClient, IConfigService configService)
     {
         _appDir = appDir;
@@ -21,11 +32,11 @@ public class VersionService : IVersionService
         _configService = configService;
     }
 
-    /// <summary>
-    /// Get list of available versions for a branch.
+    /// <inheritdoc/>
+    /// <remarks>
     /// Uses caching to avoid re-checking all versions every time.
     /// Checks versions in parallel batches for performance.
-    /// </summary>
+    /// </remarks>
     public async Task<List<int>> GetVersionListAsync(string branch, CancellationToken ct = default)
     {
         var normalizedBranch = NormalizeBranch(branch);

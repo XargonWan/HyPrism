@@ -8,10 +8,13 @@ using HyPrism.Services.User;
 namespace HyPrism.Services.Game;
 
 /// <summary>
-/// Handles the actual game launch process: client patching, authentication,
-/// process creation, and lifecycle management.
-/// Extracted from the former monolithic GameSessionService.
+/// Handles the game launch process including client patching, authentication,
+/// process creation and monitoring, and Discord Rich Presence updates.
 /// </summary>
+/// <remarks>
+/// Extracted from the former monolithic GameSessionService for better separation of concerns.
+/// Coordinates between multiple services to prepare and launch the game.
+/// </remarks>
 public class GameLauncher : IGameLauncher
 {
     private readonly IConfigService _configService;
@@ -26,6 +29,18 @@ public class GameLauncher : IGameLauncher
     
     private Config _config => _configService.Configuration;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="GameLauncher"/> class.
+    /// </summary>
+    /// <param name="configService">Service for accessing configuration.</param>
+    /// <param name="launchService">Service for launch prerequisites (JRE, VC++ Redist).</param>
+    /// <param name="instanceService">Service for instance path management.</param>
+    /// <param name="gameProcessService">Service for game process tracking.</param>
+    /// <param name="progressService">Service for progress notifications.</param>
+    /// <param name="discordService">Service for Discord Rich Presence.</param>
+    /// <param name="skinService">Service for skin protection.</param>
+    /// <param name="userIdentityService">Service for user identity management.</param>
+    /// <param name="httpClient">HTTP client for authentication requests.</param>
     public GameLauncher(
         IConfigService configService,
         ILaunchService launchService,
@@ -48,6 +63,7 @@ public class GameLauncher : IGameLauncher
         _httpClient = httpClient;
     }
 
+    /// <inheritdoc/>
     public async Task LaunchGameAsync(string versionPath, string branch, CancellationToken ct = default)
     {
         Logger.Info("Game", $"Preparing to launch from {versionPath}");

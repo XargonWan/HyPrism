@@ -7,17 +7,22 @@ using System.Threading.Tasks;
 
 namespace HyPrism.Services.Core;
 
+/// <summary>
+/// Manages application theming including accent colors with smooth animated transitions.
+/// Updates Avalonia application resources for dynamic theme changes.
+/// </summary>
 public class ThemeService : ReactiveObject, IThemeService, IDisposable
 {
     private CancellationTokenSource? _animationCts;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ThemeService"/> class.
+    /// </summary>
     public ThemeService()
     {
     }
 
-    /// <summary>
-    /// Applies the accent color from the configuration to the Application Resources with smooth transition.
-    /// </summary>
+    /// <inheritdoc/>
     public void ApplyAccentColor(string hexColor)
     {
         if (Color.TryParse(hexColor, out Color newColor))

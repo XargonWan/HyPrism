@@ -8,9 +8,13 @@ using HyPrism.Services.Game;
 namespace HyPrism.Services.Core;
 
 /// <summary>
-/// Управляет обновлениями лаунчера HyPrism через GitHub Releases.
-/// Поддерживает каналы: release (стабильный) и beta (пре-релизы).
+/// Manages HyPrism launcher updates via GitHub Releases.
+/// Supports release (stable) and beta (pre-release) update channels.
 /// </summary>
+/// <remarks>
+/// Checks GitHub releases API for new versions and handles the download,
+/// extraction, and restart process for self-updating.
+/// </remarks>
 public class UpdateService : IUpdateService
 {
     private const string GitHubApiUrl = "https://api.github.com/repos/yyyumeniku/HyPrism/releases";
@@ -22,10 +26,22 @@ public class UpdateService : IUpdateService
     private readonly VersionService _versionService;
     private readonly InstanceService _instanceService;
     private readonly BrowserService _browserService;
-    private readonly ProgressNotificationService _progressNotificationService; // Injected
+    private readonly ProgressNotificationService _progressNotificationService;
     
+    /// <summary>
+    /// Raised when a launcher update is available.
+    /// </summary>
     public event Action<object>? LauncherUpdateAvailable;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="UpdateService"/> class.
+    /// </summary>
+    /// <param name="httpClient">The HTTP client for API requests.</param>
+    /// <param name="configService">The configuration service.</param>
+    /// <param name="versionService">The version service for version checks.</param>
+    /// <param name="instanceService">The instance service for path management.</param>
+    /// <param name="browserService">The browser service for opening URLs.</param>
+    /// <param name="progressNotificationService">The progress notification service.</param>
     public UpdateService(
         HttpClient httpClient,
         ConfigService configService,
@@ -44,6 +60,10 @@ public class UpdateService : IUpdateService
 
     private Config _config => _configService.Configuration;
 
+    /// <summary>
+    /// Gets the path to the latest game instance for the current branch.
+    /// </summary>
+    /// <returns>The path to the latest instance directory.</returns>
     private string GetLatestInstancePath()
     {
         var branch = UtilityService.NormalizeVersionType(_config.VersionType);

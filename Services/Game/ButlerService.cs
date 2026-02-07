@@ -5,6 +5,14 @@ using HyPrism.Services.Core;
 
 namespace HyPrism.Services.Game;
 
+/// <summary>
+/// Provides functionality for managing the Butler patching tool.
+/// Butler is used for applying differential game updates via PWR patch files.
+/// </summary>
+/// <remarks>
+/// Butler is automatically downloaded from itch.io's broth distribution system
+/// when needed. On macOS, the amd64 version is used via Rosetta 2.
+/// </remarks>
 public class ButlerService : IButlerService
 {
     private const string ButlerVersion = "15.21.0";
@@ -14,6 +22,11 @@ public class ButlerService : IButlerService
     private readonly string _cacheDir;
     private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromMinutes(5) };
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ButlerService"/> class.
+    /// Creates the Butler and Cache directories if they don't exist.
+    /// </summary>
+    /// <param name="appDir">The application data directory path.</param>
     public ButlerService(string appDir)
     {
         _butlerDir = Path.Combine(appDir, "Butler");
@@ -22,18 +35,21 @@ public class ButlerService : IButlerService
         Directory.CreateDirectory(_cacheDir);
     }
 
+    /// <inheritdoc/>
     public string GetButlerPath()
     {
         string name = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "butler.exe" : "butler";
         return Path.Combine(_butlerDir, name);
     }
 
+    /// <inheritdoc/>
     public bool IsButlerInstalled()
     {
         string path = GetButlerPath();
         return File.Exists(path);
     }
 
+    /// <inheritdoc/>
     public async Task<string> EnsureButlerInstalledAsync(Action<int, string>? progressCallback = null)
     {
         // Recreate directories if they were removed externally

@@ -4,11 +4,21 @@ namespace HyPrism.Services.Core;
 /// Manages all launcher settings (preferences, UI config, behavior options).
 /// Provides centralized access to configuration properties with automatic persistence.
 /// </summary>
+/// <remarks>
+/// This service acts as a facade over <see cref="ConfigService"/> and <see cref="LocalizationService"/>,
+/// exposing settings through a clean interface while handling persistence internally.
+/// </remarks>
 public class SettingsService : ISettingsService
 {
     private readonly ConfigService _configService;
     private readonly LocalizationService _localizationService;
     
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SettingsService"/> class.
+    /// Applies the saved language setting to the localization service on startup.
+    /// </summary>
+    /// <param name="configService">The configuration service for persisting settings.</param>
+    /// <param name="localizationService">The localization service for language management.</param>
     public SettingsService(ConfigService configService, LocalizationService localizationService)
     {
         _configService = configService;
@@ -22,14 +32,18 @@ public class SettingsService : ISettingsService
         }
     }
     
-    // Events
+    /// <inheritdoc/>
     public event Action<string>? OnAccentColorChanged;
+    
+    /// <inheritdoc/>
     public event Action<string?>? OnBackgroundChanged;
     
     // ========== Localization Settings (Language) ==========
     
+    /// <inheritdoc/>
     public string GetLanguage() => _configService.Configuration.Language;
 
+    /// <inheritdoc/>
     public bool SetLanguage(string languageCode)
     {
         var availableLanguages = LocalizationService.GetAvailableLanguages();
@@ -47,8 +61,10 @@ public class SettingsService : ISettingsService
 
     // ========== Music Settings ==========
     
+    /// <inheritdoc/>
     public bool GetMusicEnabled() => _configService.Configuration.MusicEnabled;
     
+    /// <inheritdoc/>
     public bool SetMusicEnabled(bool enabled)
     {
         _configService.Configuration.MusicEnabled = enabled;
@@ -58,8 +74,10 @@ public class SettingsService : ISettingsService
 
     // ========== Launcher Branch (release/beta update channel) ==========
     
+    /// <inheritdoc/>
     public string GetLauncherBranch() => _configService.Configuration.LauncherBranch;
     
+    /// <inheritdoc/>
     public bool SetLauncherBranch(string branch)
     {
         var normalizedBranch = branch?.ToLowerInvariant() ?? "release";
@@ -81,8 +99,10 @@ public class SettingsService : ISettingsService
 
     // ========== Close After Launch Setting ==========
     
+    /// <inheritdoc/>
     public bool GetCloseAfterLaunch() => _configService.Configuration.CloseAfterLaunch;
     
+    /// <inheritdoc/>
     public bool SetCloseAfterLaunch(bool enabled)
     {
         _configService.Configuration.CloseAfterLaunch = enabled;
@@ -93,8 +113,10 @@ public class SettingsService : ISettingsService
 
     // ========== Discord Announcements Settings ==========
     
+    /// <inheritdoc/>
     public bool GetShowDiscordAnnouncements() => _configService.Configuration.ShowDiscordAnnouncements;
     
+    /// <inheritdoc/>
     public bool SetShowDiscordAnnouncements(bool enabled)
     {
         _configService.Configuration.ShowDiscordAnnouncements = enabled;
@@ -103,11 +125,13 @@ public class SettingsService : ISettingsService
         return true;
     }
 
+    /// <inheritdoc/>
     public bool IsAnnouncementDismissed(string announcementId)
     {
         return _configService.Configuration.DismissedAnnouncementIds.Contains(announcementId);
     }
 
+    /// <inheritdoc/>
     public bool DismissAnnouncement(string announcementId)
     {
         var config = _configService.Configuration;
@@ -122,8 +146,10 @@ public class SettingsService : ISettingsService
 
     // ========== News Settings ==========
     
+    /// <inheritdoc/>
     public bool GetDisableNews() => _configService.Configuration.DisableNews;
     
+    /// <inheritdoc/>
     public bool SetDisableNews(bool disabled)
     {
         _configService.Configuration.DisableNews = disabled;
@@ -134,8 +160,10 @@ public class SettingsService : ISettingsService
 
     // ========== Background Settings ==========
     
+    /// <inheritdoc/>
     public string GetBackgroundMode() => _configService.Configuration.BackgroundMode;
     
+    /// <inheritdoc/>
     public bool SetBackgroundMode(string mode)
     {
         _configService.Configuration.BackgroundMode = mode;
@@ -145,9 +173,7 @@ public class SettingsService : ISettingsService
         return true;
     }
 
-    /// <summary>
-    /// Gets the list of available background filenames (paths relative to asset root or names)
-    /// </summary>
+    /// <inheritdoc/>
     public List<string> GetAvailableBackgrounds()
     {
         var backgrounds = new List<string>();
@@ -165,8 +191,10 @@ public class SettingsService : ISettingsService
 
     // ========== Accent Color Settings ==========
     
+    /// <inheritdoc/>
     public string GetAccentColor() => _configService.Configuration.AccentColor;
     
+    /// <inheritdoc/>
     public bool SetAccentColor(string color)
     {
         _configService.Configuration.AccentColor = color;
@@ -178,8 +206,10 @@ public class SettingsService : ISettingsService
 
     // ========== Onboarding State ==========
     
+    /// <inheritdoc/>
     public bool GetHasCompletedOnboarding() => _configService.Configuration.HasCompletedOnboarding;
     
+    /// <inheritdoc/>
     public bool SetHasCompletedOnboarding(bool completed)
     {
         _configService.Configuration.HasCompletedOnboarding = completed;
@@ -188,9 +218,7 @@ public class SettingsService : ISettingsService
         return true;
     }
 
-    /// <summary>
-    /// Resets the onboarding so it will show again on next launch.
-    /// </summary>
+    /// <inheritdoc/>
     public bool ResetOnboarding()
     {
         _configService.Configuration.HasCompletedOnboarding = false;
@@ -201,8 +229,10 @@ public class SettingsService : ISettingsService
 
     // ========== Online Mode Settings ==========
     
+    /// <inheritdoc/>
     public bool GetOnlineMode() => _configService.Configuration.OnlineMode;
     
+    /// <inheritdoc/>
     public bool SetOnlineMode(bool online)
     {
         _configService.Configuration.OnlineMode = online;
@@ -213,8 +243,10 @@ public class SettingsService : ISettingsService
     
     // ========== Auth Domain Settings ==========
     
+    /// <inheritdoc/>
     public string GetAuthDomain() => _configService.Configuration.AuthDomain;
     
+    /// <inheritdoc/>
     public bool SetAuthDomain(string domain)
     {
         if (string.IsNullOrWhiteSpace(domain))
@@ -229,8 +261,10 @@ public class SettingsService : ISettingsService
 
     // ========== Launcher Data Directory Settings ==========
     
+    /// <inheritdoc/>
     public string GetLauncherDataDirectory() => _configService.Configuration.LauncherDataDirectory;
     
+    /// <inheritdoc/>
     public Task<string?> SetLauncherDataDirectoryAsync(string path)
     {
         try

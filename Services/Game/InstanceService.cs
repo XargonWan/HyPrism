@@ -6,9 +6,13 @@ using HyPrism.Models;
 namespace HyPrism.Services.Game;
 
 /// <summary>
-/// Manages game instance paths, versioning, and legacy data migration.
-/// Handles directory structure, instance discovery, and automatic migration from old launcher versions.
+/// Manages game instance paths, versioning, and data organization.
+/// Handles instance discovery, creation, and migration from legacy launcher versions.
 /// </summary>
+/// <remarks>
+/// Instances are organized by branch (release/pre-release) and version number.
+/// This service also handles user data directories and cosmetic skins.
+/// </remarks>
 public class InstanceService : IInstanceService
 {
     private readonly string _appDir;
@@ -22,22 +26,30 @@ public class InstanceService : IInstanceService
         PropertyNameCaseInsensitive = true
     };
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InstanceService"/> class.
+    /// </summary>
+    /// <param name="appDir">The application data directory path.</param>
+    /// <param name="configService">The configuration service for accessing settings.</param>
     public InstanceService(string appDir, ConfigService configService)
     {
         _appDir = appDir;
         _configService = configService;
     } 
 
-    // Helper to get current config
+    /// <summary>
+    /// Gets the current configuration from the config service.
+    /// </summary>
+    /// <returns>The current configuration object.</returns>
     private Config GetConfig() => _configService.Configuration;
     
-    // Helper to save config
+    /// <summary>
+    /// Persists the current configuration to disk.
+    /// </summary>
+    /// <param name="config">The configuration object (parameter kept for API compatibility).</param>
     private void SaveConfig(Config config) => _configService.SaveConfig();
 
-    /// <summary>
-    /// Get the root directory for all game instances.
-    /// Creates the directory if it doesn't exist.
-    /// </summary>
+    /// <inheritdoc/>
     public string GetInstanceRoot()
     {
         var config = GetConfig();

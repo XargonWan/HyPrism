@@ -5,6 +5,14 @@ using ReactiveUI;
 
 namespace HyPrism.Services.Core;
 
+/// <summary>
+/// Provides localization and internationalization services for the application.
+/// Manages translation loading, caching, and reactive language switching.
+/// </summary>
+/// <remarks>
+/// Translations are loaded from embedded JSON resources in Assets/Locales.
+/// The service supports runtime language changes with reactive UI updates.
+/// </remarks>
 public class LocalizationService : ReactiveObject, ILocalizationService
 {
     // Static accessor for XAML markup extensions only (cannot use DI).
@@ -94,6 +102,11 @@ public class LocalizationService : ReactiveObject, ILocalizationService
         return result;
     }
     
+    /// <summary>
+    /// Gets or sets the current language code (e.g., "en-US", "ru-RU").
+    /// Setting this property loads the corresponding translations and notifies UI for updates.
+    /// </summary>
+    /// <value>The BCP 47 language tag of the current language.</value>
     public string CurrentLanguage
     {
         get => _currentLanguage;
@@ -120,6 +133,10 @@ public class LocalizationService : ReactiveObject, ILocalizationService
         }
     }
     
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LocalizationService"/> class.
+    /// Loads only the default English locale on startup for memory efficiency.
+    /// </summary>
     public LocalizationService()
     {
         // Load only the default language on startup - other languages are loaded on demand
@@ -156,6 +173,11 @@ public class LocalizationService : ReactiveObject, ILocalizationService
             .Select(_ => Translate(key));
     }
     
+    /// <summary>
+    /// Loads translations for the specified language code.
+    /// Uses cached translations if available, otherwise loads from embedded resources.
+    /// </summary>
+    /// <param name="languageCode">The BCP 47 language tag to load (e.g., "ru-RU").</param>
     private void LoadLanguage(string languageCode)
     {
         // Check cache first (thread-safe)
@@ -185,6 +207,12 @@ public class LocalizationService : ReactiveObject, ILocalizationService
         }
     }
 
+    /// <summary>
+    /// Internal method to load translations from embedded resources.
+    /// Also caches the loaded translations for future use.
+    /// </summary>
+    /// <param name="languageCode">The language code to load.</param>
+    /// <returns>The loaded translations dictionary, or <c>null</c> if loading failed.</returns>
     private Dictionary<string, string>? LoadLanguageInternal(string languageCode)
     {
         var assembly = Assembly.GetExecutingAssembly();
@@ -225,6 +253,12 @@ public class LocalizationService : ReactiveObject, ILocalizationService
         }
     }
     
+    /// <summary>
+    /// Recursively flattens a nested JSON element into a flat dictionary with dot-separated keys.
+    /// </summary>
+    /// <param name="element">The JSON element to flatten.</param>
+    /// <param name="prefix">The current key prefix for nested objects.</param>
+    /// <param name="result">The dictionary to populate with flattened key-value pairs.</param>
     private void FlattenJson(JsonElement element, string prefix, Dictionary<string, string> result)
     {
         if (element.ValueKind == JsonValueKind.Object)
@@ -241,6 +275,13 @@ public class LocalizationService : ReactiveObject, ILocalizationService
         }
     }
     
+    /// <summary>
+    /// Translates a key to the localized string in the current language.
+    /// Falls back to English if the key is not found in the current language.
+    /// </summary>
+    /// <param name="key">The translation key (e.g., "dashboard.play").</param>
+    /// <param name="args">Optional format arguments for placeholder replacement ({0}, {1}, etc.).</param>
+    /// <returns>The localized string, or the key itself if no translation is found.</returns>
     public string Translate(string key, params object[] args)
     {
         string? translation = null;
@@ -283,7 +324,11 @@ public class LocalizationService : ReactiveObject, ILocalizationService
         return key;
     }
     
-    // Indexer for easier access, but note: ReactiveObject doesn't auto-notify for indexers
-    // Instead, we notify via property name in CurrentLanguage setter
+    /// <summary>
+    /// Gets the localized string for the specified key.
+    /// Note: ReactiveObject doesn't auto-notify for indexers; use <see cref="GetObservable"/> for reactive bindings.
+    /// </summary>
+    /// <param name="key">The translation key.</param>
+    /// <returns>The localized string, or the key itself if not found.</returns>
     public string this[string key] => Translate(key);
 }

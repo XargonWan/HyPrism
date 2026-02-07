@@ -8,9 +8,13 @@ using HyPrism.Services.Core;
 namespace HyPrism.Services.Game;
 
 /// <summary>
-/// Отвечает за запуск игры: управление JRE, Visual C++ Redistributable,
-/// патчинг бинарников, запуск процесса игры.
+/// Manages launch prerequisites including Java Runtime Environment and Visual C++ Redistributable.
+/// Downloads and installs required runtimes before game launch.
 /// </summary>
+/// <remarks>
+/// Uses the official Hytale JRE distribution for maximum compatibility.
+/// On Windows, also ensures the Visual C++ Redistributable is installed.
+/// </remarks>
 public class LaunchService : ILaunchService
 {
     private const string RequiredJreVersion = "25.0.1_8";
@@ -19,6 +23,11 @@ public class LaunchService : ILaunchService
     private readonly string _appDir;
     private readonly HttpClient _httpClient;
     
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LaunchService"/> class.
+    /// </summary>
+    /// <param name="appDir">The application data directory path.</param>
+    /// <param name="httpClient">The HTTP client for downloading runtimes.</param>
     public LaunchService(string appDir, HttpClient httpClient)
     {
         _appDir = appDir;
@@ -27,9 +36,7 @@ public class LaunchService : ILaunchService
 
     #region JRE Management
 
-    /// <summary>
-    /// Ensure Java Runtime Environment (Hytale's official JRE) is installed.
-    /// </summary>
+    /// <inheritdoc/>
     public async Task EnsureJREInstalledAsync(Action<int, string> progressCallback)
     {
         string jreDir = Path.Combine(_appDir, "Jre");

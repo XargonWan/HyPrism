@@ -6,14 +6,24 @@ using HyPrism.Services.Core;
 namespace HyPrism.Services.Game;
 
 /// <summary>
-/// Service for authenticating with the custom auth server.
-/// Handles session creation and token retrieval.
+/// Handles authentication with the custom Hytale auth server.
+/// Manages session creation, token retrieval, and JWT handling.
 /// </summary>
+/// <remarks>
+/// Supports both the /game-session/child and /game-session endpoints
+/// for backwards compatibility with different auth server versions.
+/// </remarks>
 public class AuthService
 {
     private readonly HttpClient _httpClient;
     private readonly string _authServerUrl;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AuthService"/> class.
+    /// Normalizes the auth domain to include the sessions subdomain if needed.
+    /// </summary>
+    /// <param name="httpClient">The HTTP client for making auth requests.</param>
+    /// <param name="authDomain">The auth server domain (e.g., "sanasol.ws" or "sessions.sanasol.ws").</param>
     public AuthService(HttpClient httpClient, string authDomain)
     {
         _httpClient = httpClient;
@@ -41,9 +51,11 @@ public class AuthService
     }
 
     /// <summary>
-    /// Create a game session and get an authentication token.
-    /// This is used for the authentication flow.
+    /// Creates a game session and retrieves authentication tokens.
     /// </summary>
+    /// <param name="uuid">The player's unique identifier.</param>
+    /// <param name="playerName">The player's display name.</param>
+    /// <returns>An <see cref="AuthTokenResult"/> containing the session tokens or error information.</returns>
     public async Task<AuthTokenResult> GetGameSessionTokenAsync(string uuid, string playerName)
     {
         try

@@ -5,8 +5,13 @@ using HyPrism.Services.Game;
 namespace HyPrism.Services.User;
 
 /// <summary>
-/// Управляет скинами игроков: защита от перезаписи, резервное копирование, восстановление.
+/// Manages player skin data including protection from game overwrites,
+/// backup/restore operations, and orphaned skin recovery.
 /// </summary>
+/// <remarks>
+/// Implements file watching to protect custom skins from being 
+/// overwritten during gameplay. Backs up skin data to profile directories.
+/// </remarks>
 public class SkinService : ISkinService
 {
     // Skin protection: Watch for skin file overwrites during gameplay
@@ -21,6 +26,12 @@ public class SkinService : ISkinService
     private readonly InstanceService _instanceService;
     private readonly string _appDir;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SkinService"/> class.
+    /// </summary>
+    /// <param name="appPath">The application path configuration.</param>
+    /// <param name="configService">The configuration service.</param>
+    /// <param name="instanceService">The game instance service.</param>
     public SkinService(
         AppPathConfiguration appPath,
         ConfigService configService,
@@ -41,10 +52,7 @@ public class SkinService : ISkinService
 
     #region Skin Protection
 
-    /// <summary>
-    /// Запускает защиту файла скина от перезаписи игрой.
-    /// Устанавливает файл как READ-ONLY и мониторит изменения через FileSystemWatcher.
-    /// </summary>
+    /// <inheritdoc/>
     public void StartSkinProtection(Profile profile, string skinCachePath)
     {
         try
@@ -107,6 +115,8 @@ public class SkinService : ISkinService
     /// <summary>
     /// Handles skin file changes - restores the protected content if it was overwritten.
     /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The file system event arguments.</param>
     private void OnSkinFileChanged(object sender, FileSystemEventArgs e)
     {
         lock (_skinProtectionLock)
@@ -146,9 +156,7 @@ public class SkinService : ISkinService
         }
     }
 
-    /// <summary>
-    /// Stops the skin file watcher.
-    /// </summary>
+    /// <inheritdoc/>
     public void StopSkinProtection()
     {
         try
@@ -197,10 +205,7 @@ public class SkinService : ISkinService
 
     #region Orphaned Skin Recovery
 
-    /// <summary>
-    /// Attempts to recover orphaned skin data on startup.
-    /// Scenario: User had skin saved with UUID A, config was reset to new UUID B, old skin files still exist.
-    /// </summary>
+    /// <inheritdoc/>
     public void TryRecoverOrphanedSkinOnStartup()
     {
         try
@@ -297,9 +302,7 @@ public class SkinService : ISkinService
         }
     }
 
-    /// <summary>
-    /// Finds orphaned skin UUIDs in game cache.
-    /// </summary>
+    /// <inheritdoc/>
     public string? FindOrphanedSkinUuid()
     {
         try
@@ -386,9 +389,7 @@ public class SkinService : ISkinService
         }
     }
 
-    /// <summary>
-    /// Recovers orphaned skin data by copying it to current UUID.
-    /// </summary>
+    /// <inheritdoc/>
     public bool RecoverOrphanedSkinData(string currentUuid)
     {
         try
@@ -450,9 +451,7 @@ public class SkinService : ISkinService
 
     #region Profile Skin Management
 
-    /// <summary>
-    /// Backs up skin data for a profile (from game cache to profile folder).
-    /// </summary>
+    /// <inheritdoc/>
     public void BackupProfileSkinData(string uuid)
     {
         try
@@ -506,9 +505,7 @@ public class SkinService : ISkinService
         }
     }
 
-    /// <summary>
-    /// Restores skin data for a profile (from profile folder to game cache).
-    /// </summary>
+    /// <inheritdoc/>
     public void RestoreProfileSkinData(Profile profile)
     {
         try
@@ -557,9 +554,7 @@ public class SkinService : ISkinService
         }
     }
 
-    /// <summary>
-    /// Copies skin data for a profile to profile folder.
-    /// </summary>
+    /// <inheritdoc/>
     public void CopyProfileSkinData(string uuid, string profileDir)
     {
         try
@@ -598,6 +593,9 @@ public class SkinService : ISkinService
 
     #endregion
 
+    /// <summary>
+    /// Releases resources used by the skin service, stopping any active skin protection.
+    /// </summary>
     public void Dispose()
     {
         StopSkinProtection();

@@ -15,6 +15,12 @@ public class UserIdentityService : IUserIdentityService
     private readonly SkinService _skinService;
     private readonly InstanceService _instanceService;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="UserIdentityService"/> class.
+    /// </summary>
+    /// <param name="configService">The configuration service.</param>
+    /// <param name="skinService">The skin management service.</param>
+    /// <param name="instanceService">The game instance service.</param>
     public UserIdentityService(
         ConfigService configService,
         SkinService skinService,
@@ -25,10 +31,7 @@ public class UserIdentityService : IUserIdentityService
         _instanceService = instanceService;
     }
 
-    /// <summary>
-    /// Gets UUID for a specific username. Creates new UUID if needed.
-    /// Attempts to recover orphaned skin data when creating new UUID.
-    /// </summary>
+    /// <inheritdoc/>
     public string GetUuidForUser(string username)
     {
         var config = _configService.Configuration;
@@ -75,20 +78,15 @@ public class UserIdentityService : IUserIdentityService
         
         return newUuid;
     }
-    
-    /// <summary>
-    /// Gets the UUID for the current user (based on Nick).
-    /// </summary>
+
+    /// <inheritdoc/>
     public string GetCurrentUuid()
     {
         var config = _configService.Configuration;
         return GetUuidForUser(config.Nick);
     }
-    
-    /// <summary>
-    /// Gets all username->UUID mappings.
-    /// Returns a list of objects with username, uuid, and isCurrent properties.
-    /// </summary>
+
+    /// <inheritdoc/>
     public List<UuidMapping> GetAllUuidMappings()
     {
         var config = _configService.Configuration;
@@ -102,10 +100,8 @@ public class UserIdentityService : IUserIdentityService
             IsCurrent = kvp.Key.Equals(currentNick, StringComparison.OrdinalIgnoreCase)
         }).ToList();
     }
-    
-    /// <summary>
-    /// Sets a custom UUID for a specific username.
-    /// </summary>
+
+    /// <inheritdoc/>
     public bool SetUuidForUser(string username, string uuid)
     {
         if (string.IsNullOrWhiteSpace(username)) return false;
@@ -135,11 +131,8 @@ public class UserIdentityService : IUserIdentityService
         Logger.Info("UUID", $"Set custom UUID for user '{username}': {parsed}");
         return true;
     }
-    
-    /// <summary>
-    /// Deletes the UUID mapping for a specific username.
-    /// Cannot delete the UUID for the current user.
-    /// </summary>
+
+    /// <inheritdoc/>
     public bool DeleteUuidForUser(string username)
     {
         if (string.IsNullOrWhiteSpace(username)) return false;
@@ -168,11 +161,8 @@ public class UserIdentityService : IUserIdentityService
         
         return false;
     }
-    
-    /// <summary>
-    /// Generates a new random UUID for the current user.
-    /// Warning: This will change the player's identity and they will lose their skin!
-    /// </summary>
+
+    /// <inheritdoc/>
     public string ResetCurrentUserUuid()
     {
         var config = _configService.Configuration;
@@ -194,11 +184,8 @@ public class UserIdentityService : IUserIdentityService
         Logger.Info("UUID", $"Reset UUID for current user '{config.Nick}': {newUuid}");
         return newUuid;
     }
-    
-    /// <summary>
-    /// Switches to an existing username (and its UUID).
-    /// Returns the UUID for the username.
-    /// </summary>
+
+    /// <inheritdoc/>
     public string? SwitchToUsername(string username)
     {
         if (string.IsNullOrWhiteSpace(username)) return null;
@@ -229,12 +216,8 @@ public class UserIdentityService : IUserIdentityService
         Logger.Info("UUID", $"Created new user '{username}' with UUID {newUuid}");
         return newUuid;
     }
-    
-    /// <summary>
-    /// Attempts to recover orphaned skin data and associate it with the current user.
-    /// This is useful when a user's config was reset but their skin data still exists.
-    /// Returns true if skin data was recovered, false otherwise.
-    /// </summary>
+
+    /// <inheritdoc/>
     public bool RecoverOrphanedSkinData()
     {
         try
@@ -299,10 +282,7 @@ public class UserIdentityService : IUserIdentityService
             return false;
         }
     }
-    
-    /// <summary>
-    /// Gets the UUID of any orphaned skin found in the game cache.
-    /// Returns null if no orphaned skins are found.
-    /// </summary>
+
+    /// <inheritdoc/>
     public string? GetOrphanedSkinUuid() => _skinService.FindOrphanedSkinUuid();
 }

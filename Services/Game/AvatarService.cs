@@ -3,13 +3,19 @@ using HyPrism.Services.Core;
 namespace HyPrism.Services.Game;
 
 /// <summary>
-/// Service responsible for managing user avatar cache and preview images.
+/// Manages user avatar cache and preview images for game instances.
+/// Handles persistent avatar backup and cache cleanup across all instances.
 /// </summary>
 public class AvatarService
 {
     private readonly InstanceService _instanceService;
     private readonly string _appDir;
     
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AvatarService"/> class.
+    /// </summary>
+    /// <param name="instanceService">The instance service for accessing game instance paths.</param>
+    /// <param name="appDir">The application data directory path.</param>
     public AvatarService(InstanceService instanceService, string appDir)
     {
         _instanceService = instanceService;

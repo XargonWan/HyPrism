@@ -5,10 +5,13 @@ using HyPrism.Services.Core;
 namespace HyPrism.Services.Game;
 
 /// <summary>
-/// Orchestrates the download/update/launch workflow.
-/// Delegates to IPatchManager for differential updates and IGameLauncher for game startup.
-/// Reduced from ~1000 lines to ~300 through decomposition.
+/// Orchestrates the complete game download, update, and launch workflow.
+/// Acts as the primary coordinator between version checking, patching, and game launching.
 /// </summary>
+/// <remarks>
+/// This service was refactored from a ~1000 line monolithic class into a coordinator
+/// that delegates to specialized services like IPatchManager and IGameLauncher.
+/// </remarks>
 public class GameSessionService : IGameSessionService
 {
     private readonly IConfigService _configService;
@@ -27,6 +30,20 @@ public class GameSessionService : IGameSessionService
     private CancellationTokenSource? _downloadCts;
     private readonly object _ctsLock = new();
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="GameSessionService"/> class.
+    /// </summary>
+    /// <param name="configService">Service for accessing configuration.</param>
+    /// <param name="instanceService">Service for managing game instances.</param>
+    /// <param name="versionService">Service for version checking.</param>
+    /// <param name="launchService">Service for launch prerequisites (JRE, VC++).</param>
+    /// <param name="butlerService">Service for Butler patch tool.</param>
+    /// <param name="downloadService">Service for file downloads.</param>
+    /// <param name="progressService">Service for progress notifications.</param>
+    /// <param name="patchManager">Manager for differential updates.</param>
+    /// <param name="gameLauncher">Launcher for the game process.</param>
+    /// <param name="httpClient">HTTP client for network requests.</param>
+    /// <param name="appPath">Application path configuration.</param>
     public GameSessionService(
         IConfigService configService,
         IInstanceService instanceService,
@@ -55,6 +72,7 @@ public class GameSessionService : IGameSessionService
 
     private Config _config => _configService.Configuration;
 
+    /// <inheritdoc/>
     public async Task<DownloadProgress> DownloadAndLaunchAsync(Func<bool>? launchAfterDownloadProvider = null)
     {
         CancellationTokenSource cts;

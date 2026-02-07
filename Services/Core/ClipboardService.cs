@@ -6,10 +6,11 @@ namespace HyPrism.Services.Core;
 
 /// <summary>
 /// Clipboard service implementation using Avalonia's clipboard API.
-/// This isolates Avalonia UI dependency from ViewModels.
+/// This isolates Avalonia UI dependency from ViewModels, maintaining MVVM separation.
 /// </summary>
 public class ClipboardService : IClipboardService
 {
+    /// <inheritdoc/>
     public async Task SetTextAsync(string text)
     {
         var clipboard = GetClipboard();
@@ -19,6 +20,7 @@ public class ClipboardService : IClipboardService
         }
     }
 
+    /// <inheritdoc/>
     public async Task<string?> GetTextAsync()
     {
         var clipboard = GetClipboard();
@@ -29,6 +31,10 @@ public class ClipboardService : IClipboardService
         return null;
     }
 
+    /// <summary>
+    /// Gets the Avalonia clipboard instance from the main window.
+    /// </summary>
+    /// <returns>The clipboard instance, or <c>null</c> if not available.</returns>
     private static Avalonia.Input.Platform.IClipboard? GetClipboard()
     {
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)

@@ -3,25 +3,32 @@ using HyPrism.Models;
 namespace HyPrism.Services.Core;
 
 /// <summary>
-/// Service responsible for managing and dispatching progress notifications.
+/// Manages progress notifications for download, installation, and game state changes.
+/// Coordinates with Discord Rich Presence to reflect current activity.
 /// </summary>
 public class ProgressNotificationService : IProgressNotificationService
 {
     private readonly DiscordService _discordService;
     
-    // Events
+    /// <inheritdoc/>
     public event Action<ProgressUpdateMessage>? DownloadProgressChanged;
+    
+    /// <inheritdoc/>
     public event Action<string, int>? GameStateChanged;
+    
+    /// <inheritdoc/>
     public event Action<string, string, string?>? ErrorOccurred;
     
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ProgressNotificationService"/> class.
+    /// </summary>
+    /// <param name="discordService">The Discord service for Rich Presence updates.</param>
     public ProgressNotificationService(DiscordService discordService)
     {
         _discordService = discordService;
     }
     
-    /// <summary>
-    /// Sends progress update notification.
-    /// </summary>
+    /// <inheritdoc/>
     public void SendProgress(string stage, int progress, string messageKey, object[]? args, long downloaded, long total)
     {
         var msg = new ProgressUpdateMessage 
@@ -44,10 +51,9 @@ public class ProgressNotificationService : IProgressNotificationService
         }
     }
 
+    /// <inheritdoc/>
     public void ReportDownloadProgress(string stage, int progress, string messageKey, object[]? args = null, long downloaded = 0, long total = 0) 
         => SendProgress(stage, progress, messageKey, args, downloaded, total);
-    
-    /// <summary>
     /// Sends game state change notification.
     /// </summary>
     public void SendGameStateEvent(string state, int? exitCode = null)

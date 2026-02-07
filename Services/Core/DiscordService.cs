@@ -5,16 +5,41 @@ namespace HyPrism.Services.Core;
 
 /// <summary>
 /// Silent logger for Discord RPC that suppresses connection error spam.
-/// Only logs critical errors to HyPrism's logger.
+/// Only logs critical errors to HyPrism's logger when they are not expected connection failures.
 /// </summary>
 internal class SilentDiscordLogger : ILogger
 {
+    /// <summary>
+    /// Gets or sets the minimum log level. Defaults to Error.
+    /// </summary>
     public LogLevel Level { get; set; } = LogLevel.Error;
 
+    /// <summary>
+    /// Logs a trace message. Suppressed in this implementation.
+    /// </summary>
+    /// <param name="message">The message format string.</param>
+    /// <param name="args">Format arguments.</param>
     public void Trace(string message, params object[] args) { }
+    
+    /// <summary>
+    /// Logs an info message. Suppressed in this implementation.
+    /// </summary>
+    /// <param name="message">The message format string.</param>
+    /// <param name="args">Format arguments.</param>
     public void Info(string message, params object[] args) { }
+    
+    /// <summary>
+    /// Logs a warning message. Suppressed in this implementation.
+    /// </summary>
+    /// <param name="message">The message format string.</param>
+    /// <param name="args">Format arguments.</param>
     public void Warning(string message, params object[] args) { }
     
+    /// <summary>
+    /// Logs an error message. Only logs non-connection errors to avoid spam when Discord is not running.
+    /// </summary>
+    /// <param name="message">The message format string.</param>
+    /// <param name="args">Format arguments.</param>
     public void Error(string message, params object[] args)
     {
         // Only log if it's not a connection failure (those are expected when Discord is not running)
@@ -25,6 +50,10 @@ internal class SilentDiscordLogger : ILogger
     }
 }
 
+/// <summary>
+/// Manages Discord Rich Presence integration for displaying launcher and game status.
+/// Handles connection failures gracefully when Discord is not running.
+/// </summary>
 public class DiscordService : IDiscordService, IDisposable
 {
     private const string ApplicationId = "1464867466382540995";
@@ -34,14 +63,22 @@ public class DiscordService : IDiscordService, IDisposable
     private bool _enabled;
     private DateTime _startTime;
     
+    /// <summary>
+    /// Defines the possible presence states for Discord Rich Presence.
+    /// </summary>
     public enum PresenceState
     {
+        /// <summary>User is idle in the launcher.</summary>
         Idle,
+        /// <summary>Game files are being downloaded.</summary>
         Downloading,
+        /// <summary>Game is being installed or extracted.</summary>
         Installing,
+        /// <summary>User is playing the game.</summary>
         Playing
     }
 
+    /// <inheritdoc/>
     public void Initialize()
     {
         if (string.IsNullOrEmpty(ApplicationId))
@@ -94,6 +131,7 @@ public class DiscordService : IDiscordService, IDisposable
         }
     }
 
+    /// <inheritdoc/>
     public void SetPresence(PresenceState state, string? details = null, int? progress = null)
     {
         if (!_enabled || _client == null || !_client.IsInitialized) return;
@@ -161,6 +199,7 @@ public class DiscordService : IDiscordService, IDisposable
         }
     }
 
+    /// <inheritdoc/>
     public void ClearPresence()
     {
         try
@@ -173,6 +212,9 @@ public class DiscordService : IDiscordService, IDisposable
         }
     }
 
+    /// <summary>
+    /// Disposes the Discord RPC client and clears presence.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed) return;

@@ -5,13 +5,21 @@ using System.IO;
 
 namespace HyPrism.Services.Game;
 
+/// <summary>
+/// Manages the game process lifecycle including tracking, monitoring, and termination.
+/// Handles detection of running Hytale instances across different platforms.
+/// </summary>
 public class GameProcessService : IGameProcessService
 {
     private Process? _gameProcess;
 
+    /// <inheritdoc/>
     public void SetGameProcess(Process? p) => _gameProcess = p;
+    
+    /// <inheritdoc/>
     public Process? GetGameProcess() => _gameProcess;
 
+    /// <inheritdoc/>
     public bool IsGameRunning()
     {
         // 1. Check tracked process
@@ -25,10 +33,7 @@ public class GameProcessService : IGameProcessService
         return false;
     }
 
-    /// <summary>
-    /// Scans for an existing Hytale process (e.g. if launcher was restarted).
-    /// Updates the tracked process if found.
-    /// </summary>
+    /// <inheritdoc/>
     public bool CheckForRunningGame()
     {
         if (IsGameRunning()) return true;

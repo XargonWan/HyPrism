@@ -4,21 +4,33 @@ using HyPrism.Models;
 namespace HyPrism.Services.Core;
 
 /// <summary>
-/// Manages launcher configuration (loading, saving, settings)
+/// Manages launcher configuration persistence including loading, saving, and automatic migrations.
+/// Configuration is stored as JSON in the application data directory.
 /// </summary>
 public class ConfigService : IConfigService
 {
     private readonly string _configPath;
     private Config _config;
     
+    /// <inheritdoc/>
     public Config Configuration => _config;
     
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ConfigService"/> class.
+    /// Loads existing configuration or creates a new one with default values.
+    /// </summary>
+    /// <param name="appDataPath">The application data directory path where config.json is stored.</param>
     public ConfigService(string appDataPath)
     {
         _configPath = Path.Combine(appDataPath, "config.json");
         _config = LoadConfig();
     }
     
+    /// <summary>
+    /// Loads configuration from disk and applies any necessary migrations.
+    /// Creates a new configuration with defaults if file doesn't exist or is invalid.
+    /// </summary>
+    /// <returns>The loaded or newly created configuration.</returns>
     private Config LoadConfig()
     {
         Config config;
@@ -138,6 +150,7 @@ public class ConfigService : IConfigService
         return config;
     }
     
+    /// <inheritdoc/>
     public void SaveConfig()
     {
         try
@@ -155,12 +168,14 @@ public class ConfigService : IConfigService
         }
     }
     
+    /// <inheritdoc/>
     public void ResetConfig()
     {
         _config = new Config();
         SaveConfig();
     }
 
+    /// <inheritdoc/>
     public Task<string?> SetInstanceDirectoryAsync(string path)
     {
         try

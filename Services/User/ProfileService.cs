@@ -4,22 +4,28 @@ using HyPrism.Services.Core;
 namespace HyPrism.Services.User;
 
 /// <summary>
-/// Manages user profiles, avatars, nicknames, and UUIDs
+/// Manages user profiles, avatars, nicknames, and UUIDs.
 /// </summary>
 public class ProfileService : IProfileService
 {
     private readonly string _appDataPath;
     private readonly ConfigService _configService;
-    
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ProfileService"/> class.
+    /// </summary>
+    /// <param name="appDataPath">The application data directory path.</param>
+    /// <param name="configService">The configuration service for accessing user settings.</param>
     public ProfileService(string appDataPath, ConfigService configService)
     {
         _appDataPath = appDataPath;
         _configService = configService;
     }
-    
-    // Nickname management
+
+    /// <inheritdoc/>
     public string GetNick() => _configService.Configuration.Nick;
-    
+
+    /// <inheritdoc/>
     public bool SetNick(string nick)
     {
         if (string.IsNullOrWhiteSpace(nick) || nick.Length > 16)
@@ -29,10 +35,11 @@ public class ProfileService : IProfileService
         _configService.SaveConfig();
         return true;
     }
-    
-    // UUID management
+
+    /// <inheritdoc/>
     public string GetUUID() => GetCurrentUuid();
-    
+
+    /// <inheritdoc/>
     public bool SetUUID(string uuid)
     {
         if (string.IsNullOrWhiteSpace(uuid))
@@ -42,7 +49,8 @@ public class ProfileService : IProfileService
         _configService.SaveConfig();
         return true;
     }
-    
+
+    /// <inheritdoc/>
     public string GetCurrentUuid()
     {
         var uuid = _configService.Configuration.UUID;
@@ -53,19 +61,21 @@ public class ProfileService : IProfileService
         }
         return uuid;
     }
-    
+
+    /// <inheritdoc/>
     public string GenerateNewUuid()
     {
         return Guid.NewGuid().ToString();
     }
-    
-    // Avatar management
+
+    /// <inheritdoc/>
     public string? GetAvatarPreview()
     {
         var uuid = GetCurrentUuid();
         return GetAvatarPreviewForUUID(uuid);
     }
-    
+
+    /// <inheritdoc/>
     public string? GetAvatarPreviewForUUID(string uuid)
     {
         // Path: AppData/skins/{uuid}/skin.png or skin.jpg
@@ -84,7 +94,8 @@ public class ProfileService : IProfileService
         
         return null;
     }
-    
+
+    /// <inheritdoc/>
     public bool ClearAvatarCache()
     {
         try
@@ -101,7 +112,8 @@ public class ProfileService : IProfileService
             return false;
         }
     }
-    
+
+    /// <inheritdoc/>
     public string GetAvatarDirectory()
     {
         var uuid = GetCurrentUuid();
@@ -112,7 +124,8 @@ public class ProfileService : IProfileService
         
         return skinsPath;
     }
-    
+
+    /// <inheritdoc/>
     public bool OpenAvatarDirectory()
     {
         try
@@ -139,13 +152,14 @@ public class ProfileService : IProfileService
             return false;
         }
     }
-    
-    // Profile list management
+
+    /// <inheritdoc/>
     public List<Profile> GetProfiles()
     {
         return _configService.Configuration.Profiles ?? new List<Profile>();
     }
-    
+
+    /// <inheritdoc/>
     public bool CreateProfile(string name, string? uuid = null)
     {
         var profiles = GetProfiles();
@@ -165,7 +179,8 @@ public class ProfileService : IProfileService
         
         return true;
     }
-    
+
+    /// <inheritdoc/>
     public bool DeleteProfile(string profileId)
     {
         var profiles = GetProfiles();
@@ -180,7 +195,8 @@ public class ProfileService : IProfileService
         
         return true;
     }
-    
+
+    /// <inheritdoc/>
     public bool SwitchProfile(string profileId)
     {
         var profiles = GetProfiles();
@@ -194,7 +210,8 @@ public class ProfileService : IProfileService
         
         return true;
     }
-    
+
+    /// <inheritdoc/>
     public bool SaveCurrentAsProfile()
     {
         var currentNick = GetNick();
@@ -226,6 +243,7 @@ public class ProfileService : IProfileService
         return true;
     }
 
+    /// <inheritdoc/>
     public string GetProfilePath(Profile profile)
     {
         var safeName = UtilityService.SanitizeFileName(profile.Name);
