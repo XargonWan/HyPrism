@@ -5,6 +5,7 @@ using HyPrism.UI;
 using Avalonia.ReactiveUI;
 using Serilog;
 using System.Runtime;
+using System.Text;
 
 namespace HyPrism;
 
