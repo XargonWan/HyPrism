@@ -25,7 +25,7 @@ namespace HyPrism.Services.Core;
 /// @type ProgressUpdate { state: string; progress: number; messageKey: string; args?: unknown[]; downloadedBytes: number; totalBytes: number; }
 /// @type GameState { state: 'starting' | 'running' | 'stopped'; exitCode: number; }
 /// @type GameError { type: string; message: string; technical?: string; }
-/// @type NewsItem { title: string; description?: string; url?: string; imageUrl?: string; coverImageUrl?: string; publishDate?: string; category?: string; }
+/// @type NewsItem { title: string; excerpt?: string; url?: string; date?: string; publishedAt?: string; author?: string; imageUrl?: string; source?: string; }
 /// @type Profile { id: string; name: string; avatar?: string; }
 /// @type ProfileSnapshot { nick: string; uuid: string; avatarPath?: string; }
 /// @type SettingsSnapshot { language: string; musicEnabled: boolean; launcherBranch: string; closeAfterLaunch: boolean; showDiscordAnnouncements: boolean; disableNews: boolean; backgroundMode: string; availableBackgrounds: string[]; accentColor: string; hasCompletedOnboarding: boolean; onlineMode: boolean; authDomain: string; dataDirectory: string; launchOnStartup?: boolean; minimizeToTray?: boolean; animations?: boolean; transparency?: boolean; resolution?: string; ramMb?: number; sound?: boolean; closeOnLaunch?: boolean; developerMode?: boolean; verboseLogging?: boolean; preRelease?: boolean; [key: string]: unknown; }
@@ -349,12 +349,13 @@ public class IpcService
 
         Electron.IpcMain.On("hyprism:i18n:get", (args) =>
         {
-            Reply("hyprism:i18n:get:reply", localization.GetAllTranslations(ArgsToString(args)));
+            var code = ArgsToString(args);
+            Reply("hyprism:i18n:get:reply", localization.GetAllTranslations(string.IsNullOrEmpty(code) ? null : code));
         });
 
         Electron.IpcMain.On("hyprism:i18n:current", (_) =>
         {
-            ReplyRaw("hyprism:i18n:current:reply", localization.CurrentLanguage);
+            Reply("hyprism:i18n:current:reply", localization.CurrentLanguage);
         });
 
         Electron.IpcMain.On("hyprism:i18n:set", (args) =>

@@ -25,7 +25,7 @@ export const ProfilesPage: React.FC<ProfilesPageProps> = ({ onProfileUpdate }) =
       animate="animate"
       exit="exit"
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="h-full flex flex-col px-8 pt-14 pb-20"
+      className="h-full flex flex-col px-8 pt-14 pb-28"
     >
       {/* Page Header */}
       <div className="flex items-center justify-between mb-4 flex-shrink-0">

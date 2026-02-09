@@ -1,79 +1,140 @@
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import { Language } from './constants/enums';
-import ru from './locales/ru.json';
-import en from './locales/en.json';
-import tr from './locales/tr.json';
-import fr from './locales/fr.json';
-import es from './locales/es.json';
-import pt from './locales/pt.json';
-import de from './locales/de.json';
-import zh from './locales/zh.json';
-import ja from './locales/ja.json';
-import ko from './locales/ko.json';
-import uk from './locales/uk.json';
-import be from './locales/be.json';
+import { ipc } from '@/lib/ipc';
 
-const getSavedLanguage = (): string => {
-    const saved = localStorage.getItem('i18nextLng');
-    const supportedLanguages = Object.values(Language) as string[];
+// Import all locale files directly
+import enUS from './assets/locales/en-US.json';
+import ruRU from './assets/locales/ru-RU.json';
+import deDE from './assets/locales/de-DE.json';
+import esES from './assets/locales/es-ES.json';
+import frFR from './assets/locales/fr-FR.json';
+import jaJP from './assets/locales/ja-JP.json';
+import koKR from './assets/locales/ko-KR.json';
+import ptBR from './assets/locales/pt-BR.json';
+import trTR from './assets/locales/tr-TR.json';
+import ukUA from './assets/locales/uk-UA.json';
+import zhCN from './assets/locales/zh-CN.json';
+import beBY from './assets/locales/be-BY.json';
 
-    if (saved && supportedLanguages.includes(saved)) {
-        return saved;
-    }
-    return Language.ENGLISH;
+// Map of all available translations
+const locales: Record<string, Record<string, unknown>> = {
+    'en-US': enUS,
+    'ru-RU': ruRU,
+    'de-DE': deDE,
+    'es-ES': esES,
+    'fr-FR': frFR,
+    'ja-JP': jaJP,
+    'ko-KR': koKR,
+    'pt-BR': ptBR,
+    'tr-TR': trTR,
+    'uk-UA': ukUA,
+    'zh-CN': zhCN,
+    'be-BY': beBY,
 };
 
-i18n
-    .use(initReactI18next)
-    .init({
-        resources: {
-            [Language.ENGLISH]: {
-                translation: en,
-            },
-            [Language.RUSSIAN]: {
-                translation: ru,
-            },
-            [Language.TURKISH]: {
-                translation: tr,
-            },
-            [Language.FRENCH]: {
-                translation: fr,
-            },
-            [Language.SPANISH]: {
-                translation: es,
-            },
-            [Language.PORTUGUESE]: {
-                translation: pt,
-            },
-            [Language.GERMAN]: {
-                translation: de,
-            },
-            [Language.CHINESE]: {
-                translation: zh,
-            },
-            [Language.JAPANESE]: {
-                translation: ja,
-            },
-            [Language.KOREAN]: {
-                translation: ko,
-            },
-            [Language.UKRAINIAN]: {
-                translation: uk,
-            },
-            [Language.BELARUSIAN]: {
-                translation: be,
-            },
-        },
-        lng: getSavedLanguage(),
-        fallbackLng: Language.ENGLISH,
-        interpolation: {
-            escapeValue: false,
-        },
-    });
+/**
+ * Flatten nested JSON object to dot-separated keys
+ * { main: { play: "PLAY" } } -> { "main.play": "PLAY" }
+ */
+function flattenTranslations(obj: Record<string, unknown>, prefix = ''): Record<string, string> {
+    const result: Record<string, string> = {};
+    
+    for (const [key, value] of Object.entries(obj)) {
+        const newKey = prefix ? `${prefix}.${key}` : key;
+        
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+            Object.assign(result, flattenTranslations(value as Record<string, unknown>, newKey));
+        } else if (typeof value === 'string') {
+            result[newKey] = value;
+        }
+    }
+    
+    return result;
+}
 
-i18n.on('languageChanged', (lng) => {
-    localStorage.setItem('i18nextLng', lng);
-});
+/**
+ * Get flattened translations for a language code
+ */
+function getTranslations(langCode: string): Record<string, string> {
+    const locale = locales[langCode] || locales['en-US'];
+    return flattenTranslations(locale);
+}
+
+/**
+ * Initialize i18next with translations loaded from local files.
+ * Must be called (and awaited) before rendering the React tree.
+ */
+export async function initI18n(): Promise<void> {
+    let currentLang = Language.ENGLISH as string;
+
+    try {
+        // Get language from settings (persisted config)
+        const settings = await ipc.settings.get();
+        currentLang = settings?.language || Language.ENGLISH;
+        
+        // Validate language exists
+        if (!locales[currentLang]) {
+            console.warn(`[i18n] Language ${currentLang} not found, falling back to English`);
+            currentLang = Language.ENGLISH;
+        }
+    } catch (err) {
+        console.warn('[i18n] Failed to get settings, using English:', err);
+    }
+
+    const translations = getTranslations(currentLang);
+    console.log('[i18n] Loaded', Object.keys(translations).length, 'translations for', currentLang);
+
+    // Build resources for all languages
+    const resources: Record<string, { translation: Record<string, string> }> = {};
+    for (const langCode of Object.keys(locales)) {
+        resources[langCode] = { translation: getTranslations(langCode) };
+    }
+
+    await i18n
+        .use(initReactI18next)
+        .init({
+            resources,
+            lng: currentLang,
+            fallbackLng: Language.ENGLISH,
+            interpolation: {
+                escapeValue: false,
+            },
+            // Return key as-is when translation not found
+            returnNull: false,
+            returnEmptyString: false,
+        });
+}
+
+/**
+ * Switch language: updates backend setting, then switches i18next.
+ */
+export async function changeLanguage(langCode: string): Promise<void> {
+    // Validate language exists
+    if (!locales[langCode]) {
+        console.warn(`[i18n] Language ${langCode} not found`);
+        return;
+    }
+
+    // Tell the backend to persist the language setting
+    try {
+        await ipc.settings.set('language', langCode);
+    } catch (err) {
+        console.warn('[i18n] Failed to persist language setting:', err);
+    }
+
+    // Switch i18next to the new language
+    await i18n.changeLanguage(langCode);
+}
+
+/**
+ * Get list of available languages
+ */
+export function getAvailableLanguages(): Array<{ code: string; name: string }> {
+    return Object.entries(locales).map(([code, data]) => ({
+        code,
+        name: (data as { _langName?: string })._langName || code,
+    }));
+}
 
 export default i18n;

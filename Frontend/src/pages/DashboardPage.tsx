@@ -7,7 +7,7 @@ import { ipc } from '@/lib/ipc';
 import { GameBranch } from '../constants/enums';
 import { DiscordIcon } from '../components/icons/DiscordIcon';
 import { formatBytes } from '../utils/format';
-import hytaleLogo from '../assets/logo.png';
+import hytaleLogo from '../assets/images/logo.png';
 
 // VersionStatus type
 export type VersionStatus = {
@@ -39,6 +39,8 @@ interface DashboardPageProps {
   progress: number;
   downloaded: number;
   total: number;
+  launchState: string;
+  launchDetail: string;
   // Version
   currentBranch: string;
   currentVersion: number;
@@ -105,9 +107,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
     else if (e.key === 'Escape') { setEditValue(props.username); props.onEditToggle(false); }
   };
 
-  const branchLabel = props.currentBranch === GameBranch.RELEASE ? t('Release')
-    : props.currentBranch === GameBranch.PRE_RELEASE ? t('Pre-Release')
-    : t('Release');
+  const branchLabel = props.currentBranch === GameBranch.RELEASE ? t('main.release')
+    : props.currentBranch === GameBranch.PRE_RELEASE ? t('main.preRelease')
+    : t('main.release');
+
+  // Get translated launch state label
+  const getLaunchStateLabel = () => {
+    const stateKey = `launch.state.${props.launchState}`;
+    const translated = t(stateKey);
+    // If translation returns the key itself, fall back to raw state or generic text
+    return translated !== stateKey ? translated : (props.launchState || t('launch.state.preparing'));
+  };
 
   // Render the action section of the merged play button
   const renderActionButton = () => {
@@ -118,7 +128,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
           className="h-full px-8 flex items-center gap-2 font-black text-base tracking-tight bg-gradient-to-r from-red-600 to-red-500 text-white rounded-r-2xl hover:brightness-110 active:scale-[0.98] transition-all"
         >
           <Square size={16} fill="currentColor" />
-          <span>{t('EXIT')}</span>
+          <span>{t('main.exit')}</span>
         </button>
       );
     }
@@ -126,7 +136,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
     if (props.isDownloading) {
       return (
         <div
-          className={`h-full px-6 flex items-center justify-center relative overflow-hidden min-w-[200px] rounded-r-2xl ${props.canCancel ? 'cursor-pointer' : 'cursor-default'}`}
+          className={`h-full px-6 flex items-center justify-center relative overflow-hidden min-w-[160px] rounded-r-2xl ${props.canCancel ? 'cursor-pointer' : 'cursor-default'}`}
           style={{ background: 'rgba(255,255,255,0.05)' }}
           onMouseEnter={() => props.canCancel && setShowCancelButton(true)}
           onMouseLeave={() => setShowCancelButton(false)}
@@ -139,24 +149,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
           {showCancelButton && props.canCancel ? (
             <div className="relative z-10 flex items-center gap-2 text-red-500 hover:text-red-400 transition-colors">
               <X size={16} />
-              <span className="text-xs font-bold">{t('CANCEL')}</span>
+              <span className="text-xs font-bold">{t('main.cancel')}</span>
             </div>
           ) : (
-            <div className="relative z-10 flex flex-col items-center gap-0.5">
-              <div className="flex items-center gap-2">
-                <Loader2 size={12} className="animate-spin text-white" />
-                <span className="text-[10px] font-bold text-white uppercase">
-                  {props.downloadState === 'downloading' && t('Downloading...')}
-                  {props.downloadState === 'extracting' && t('Extracting...')}
-                  {props.downloadState === 'launching' && t('Launching...')}
-                </span>
-                <span className="text-xs font-mono text-white/80">{Math.min(Math.round(props.progress), 100)}%</span>
-              </div>
-              {props.downloadState === 'downloading' && props.total > 0 && (
-                <span className="text-[10px] font-mono text-white/60">
-                  {formatBytes(props.downloaded)} / {formatBytes(props.total)}
-                </span>
-              )}
+            <div className="relative z-10 flex items-center gap-2">
+              <Loader2 size={14} className="animate-spin text-white" />
+              <span className="text-sm font-bold text-white uppercase">{getLaunchStateLabel()}</span>
             </div>
           )}
         </div>
@@ -167,7 +165,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
       return (
         <button disabled className="h-full px-8 flex items-center gap-2 font-black text-base bg-white/10 text-white/50 cursor-not-allowed rounded-r-2xl">
           <Loader2 size={16} className="animate-spin" />
-          <span>{t('CHECKING...')}</span>
+          <span>{t('main.checking')}</span>
         </button>
       );
     }
@@ -181,7 +179,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
             className="h-full px-5 flex items-center gap-2 font-black text-sm bg-gradient-to-r from-blue-500 to-cyan-500 text-white hover:brightness-110 active:scale-[0.98] transition-all"
           >
             <RefreshCw size={14} />
-            <span>{t('UPDATE')}</span>
+            <span>{t('main.update')}</span>
           </button>
           <div className="w-px h-6 bg-white/10" />
           <button
@@ -190,7 +188,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
             style={{ background: `linear-gradient(135deg, ${accentColor}, ${accentColor}cc)`, color: accentTextColor }}
           >
             <Play size={16} fill="currentColor" />
-            <span>{t('PLAY')}</span>
+            <span>{t('main.play')}</span>
           </button>
         </div>
       );
@@ -205,7 +203,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
           style={{ background: `linear-gradient(135deg, ${accentColor}, ${accentColor}cc)`, color: accentTextColor }}
         >
           <Play size={18} fill="currentColor" />
-          <span>{t('PLAY')}</span>
+          <span>{t('main.play')}</span>
         </button>
       );
     }
@@ -218,7 +216,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
           className="h-full px-6 flex items-center gap-2 font-black text-base rounded-r-2xl bg-gradient-to-r from-purple-500 to-violet-600 text-white hover:brightness-110 active:scale-[0.98] transition-all"
         >
           <Copy size={16} />
-          <span>{t('DUPLICATE')}</span>
+          <span>{t('main.duplicate')}</span>
         </button>
       );
     }
@@ -230,7 +228,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
         className="h-full px-8 flex items-center gap-2 font-black text-base rounded-r-2xl bg-gradient-to-r from-green-500 to-emerald-600 text-white hover:brightness-110 active:scale-[0.98] transition-all"
       >
         <Download size={16} />
-        <span>{t('DOWNLOAD')}</span>
+        <span>{t('main.download')}</span>
       </button>
     );
   };
@@ -242,7 +240,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
       animate="animate"
       exit="exit"
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="h-full flex flex-col items-center justify-between px-8 pt-14 pb-20"
+      className="h-full flex flex-col items-center justify-between px-8 pt-14 pb-28"
     >
       {/* Top Row: Profile left, Social right */}
       <div className="w-full flex justify-between items-start">
@@ -259,7 +257,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
             onClick={props.onOpenProfileEditor}
             className="w-12 h-12 rounded-full overflow-hidden border-2 flex items-center justify-center flex-shrink-0"
             style={{ borderColor: accentColor, backgroundColor: localAvatar ? 'transparent' : `${accentColor}20` }}
-            title={t('Edit Profile')}
+            title={t('main.editProfile')}
           >
             {localAvatar ? (
               <img src={localAvatar} className="w-full h-full object-cover object-[center_20%]" alt="Avatar" />
@@ -303,7 +301,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
               {props.updateAvailable && (
                 <motion.button whileTap={{ scale: 0.95 }} onClick={props.onLauncherUpdate}
                   className="text-[10px] font-medium transition-colors hover:opacity-80" style={{ color: accentColor }}>
-                  <Download size={10} className="inline mr-1" />{t('Update Available')}
+                  <Download size={10} className="inline mr-1" />{t('main.updateAvailable')}
                 </motion.button>
               )}
             </div>
@@ -320,14 +318,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
           <button
             onClick={async () => { ipc.browser.open('https://discord.gg/hyprism'); }}
             className="p-2 rounded-xl hover:bg-[#5865F2]/20 transition-all active:scale-95"
-            title={t('Join Discord')}
+            title={t('main.joinDiscord')}
           >
             <DiscordIcon size={22} className="drop-shadow-lg" />
           </button>
           <button
             onClick={() => ipc.browser.open('https://github.com/yyyumeniku/HyPrism')}
             className="w-9 h-9 rounded-xl flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 active:scale-95 transition-all"
-            title={t('GitHub Repository')}
+            title={t('main.gitHubRepository')}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
           </button>
@@ -344,18 +342,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
         >
           <img src={hytaleLogo} alt="Hytale" className="h-28 drop-shadow-2xl" />
           <p className="text-white/35 text-xs">
-            {t('Educational only.')} {t('Like it?')}{' '}
+            {t('main.educational')}{' '}
             <button onClick={() => ipc.browser.open('https://hytale.com')} className="font-semibold hover:underline cursor-pointer" style={{ color: accentColor }}>
-              {t('BUY IT')}
+              {t('main.buyIt')}
             </button>
           </p>
         </motion.div>
 
         {/* Merged Branch/Version/Play Button */}
         <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ y: 16 }}
+          animate={{ y: 0 }}
           transition={{ delay: 0.35, duration: 0.4, ease: 'easeOut' }}
+          className="relative"
         >
           <div
             className="flex items-center h-14 rounded-2xl overflow-hidden glass-bar-dashboard"
@@ -384,7 +383,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
                     >
                       {props.currentBranch === branch && <Check size={14} className="text-white" strokeWidth={3} />}
                       <span className={props.currentBranch === branch ? '' : 'ml-[22px]'}>
-                        {branch === GameBranch.RELEASE ? t('Release') : t('Pre-Release')}
+                        {branch === GameBranch.RELEASE ? t('main.release') : t('main.preRelease')}
                       </span>
                     </button>
                   ))}
@@ -402,7 +401,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
                 className="h-full px-4 flex items-center gap-2 text-white/60 hover:text-white hover:bg-white/5 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-all"
               >
                 <span className="text-sm font-medium">
-                  {props.isLoadingVersions ? '...' : props.currentVersion === 0 ? t('latest') : `v${props.currentVersion}`}
+                  {props.isLoadingVersions ? '...' : props.currentVersion === 0 ? t('main.latest') : `v${props.currentVersion}`}
                 </span>
                 <ChevronDown size={11} className={`text-white/40 transition-transform ${isVersionOpen ? 'rotate-180' : ''}`} />
               </button>
@@ -424,12 +423,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
                           ) : (
                             <span className="w-[14px]" />
                           )}
-                          <span>{version === 0 ? t('latest') : `v${version}`}</span>
+                          <span>{version === 0 ? t('main.latest') : `v${version}`}</span>
                         </button>
                       );
                     })
                   ) : (
-                    <div className="px-3 py-2 text-sm text-white/40">{t('No versions')}</div>
+                    <div className="px-3 py-2 text-sm text-white/40">{t('main.noVersions')}</div>
                   )}
                 </div>
               )}
@@ -437,9 +436,36 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
 
             <div className="w-px h-7 bg-white/10" />
 
-            {/* Action Button (Play/Download/Update/Exit) */}
-            {renderActionButton()}
+            {/* Action Button (Play/Download/Update/Exit) - fixed width to prevent jumping */}
+            <div className="min-w-[140px] h-full flex items-center justify-end">
+              {renderActionButton()}
+            </div>
           </div>
+
+          {/* Progress Bar (shown when downloading) - absolute positioned */}
+          {props.isDownloading && (
+            <div className="absolute top-full left-0 right-0 mt-2 px-1">
+              {/* Progress bar container */}
+              <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{ width: `${Math.min(props.progress, 100)}%`, backgroundColor: accentColor }}
+                />
+              </div>
+              {/* Info row: launchDetail on left, bytes on right */}
+              <div className="flex justify-between items-center mt-1.5 text-[10px]">
+                <span className="text-white/50 truncate max-w-[250px]">
+                  {props.launchDetail ? (t(props.launchDetail) !== props.launchDetail ? t(props.launchDetail) : props.launchDetail) : getLaunchStateLabel()}
+                </span>
+                <span className="text-white/40 font-mono">
+                  {props.total > 0 
+                    ? `${formatBytes(props.downloaded)} / ${formatBytes(props.total)}`
+                    : `${Math.min(Math.round(props.progress), 100)}%`
+                  }
+                </span>
+              </div>
+            </div>
+          )}
         </motion.div>
       </div>
 

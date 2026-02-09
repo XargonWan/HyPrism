@@ -4,16 +4,16 @@ import { useTranslation } from 'react-i18next';
 import { useAccentColor } from '../../contexts/AccentColorContext';
 
 // Import music tracks
-import menu01 from '../../assets/menu_01.ogg';
-import menu02 from '../../assets/menu_02.ogg';
-import menu03 from '../../assets/menu_03.ogg';
-import menu04 from '../../assets/menu_04.ogg';
-import menu05 from '../../assets/menu_05.ogg';
-import menu06 from '../../assets/menu_06.ogg';
-import menu07 from '../../assets/menu_07.ogg';
-import menu08 from '../../assets/menu_08.ogg';
-import menu09 from '../../assets/menu_09.ogg';
-import menu10 from '../../assets/menu_10.ogg';
+import menu01 from '../../assets/music/menu_01.ogg';
+import menu02 from '../../assets/music/menu_02.ogg';
+import menu03 from '../../assets/music/menu_03.ogg';
+import menu04 from '../../assets/music/menu_04.ogg';
+import menu05 from '../../assets/music/menu_05.ogg';
+import menu06 from '../../assets/music/menu_06.ogg';
+import menu07 from '../../assets/music/menu_07.ogg';
+import menu08 from '../../assets/music/menu_08.ogg';
+import menu09 from '../../assets/music/menu_09.ogg';
+import menu10 from '../../assets/music/menu_10.ogg';
 
 const musicTracks = [
   menu01, menu02, menu03, menu04, menu05,

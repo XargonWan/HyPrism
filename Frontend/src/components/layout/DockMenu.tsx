@@ -31,7 +31,7 @@ export const DockMenu: React.FC<DockMenuProps> = ({ activePage, onPageChange }) 
   const { t } = useTranslation();
 
   return (
-    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 mt-2">
+    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50">
       <motion.div
         initial={{ y: 60, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}

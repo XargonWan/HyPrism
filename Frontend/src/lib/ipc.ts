@@ -22,7 +22,13 @@ export function send(channel: string, data?: unknown): void {
 
 export function on(channel: string, callback: (data: unknown) => void): () => void {
   const listener = (_event: unknown, ...args: unknown[]) => {
-    callback(args.length === 1 ? args[0] : args);
+    const raw = args.length === 1 ? args[0] : args;
+    // Backend sends JSON.Serialize(data), so we need to parse it
+    let parsed = raw;
+    if (typeof raw === 'string') {
+      try { parsed = JSON.parse(raw); } catch { /* keep raw */ }
+    }
+    callback(parsed);
   };
   ipcRenderer.on(channel, listener);
   return () => { ipcRenderer.removeListener(channel, listener); };
@@ -77,12 +83,13 @@ export interface GameError {
 
 export interface NewsItem {
   title: string;
-  description?: string;
+  excerpt?: string;
   url?: string;
+  date?: string;
+  publishedAt?: string;
+  author?: string;
   imageUrl?: string;
-  coverImageUrl?: string;
-  publishDate?: string;
-  category?: string;
+  source?: string;
 }
 
 export interface Profile {

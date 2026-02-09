@@ -36,12 +36,12 @@ import { useAccentColor } from '../../contexts/AccentColorContext';
 import { Language } from '../../constants/enums';
 import { LANGUAGE_CONFIG } from '../../constants/languages';
 import { ACCENT_COLORS } from '../../constants/colors';
-import appIcon from '../../assets/appicon.png';
+import appIcon from '../../assets/images/appicon.png';
 import { SOLID_COLORS } from '../../constants/colors';
 
 // Background images (matching SettingsModal) - using the correct path
-const backgroundModulesJpg = import.meta.glob('../../assets/bg_*.jpg', { query: '?url', import: 'default', eager: true });
-const backgroundModulesPng = import.meta.glob('../../assets/bg_*.png', { query: '?url', import: 'default', eager: true });
+const backgroundModulesJpg = import.meta.glob('../../assets/backgrounds/bg_*.jpg', { query: '?url', import: 'default', eager: true });
+const backgroundModulesPng = import.meta.glob('../../assets/backgrounds/bg_*.png', { query: '?url', import: 'default', eager: true });
 const allBackgrounds = { ...backgroundModulesJpg, ...backgroundModulesPng };
 const backgroundImages = Object.entries(allBackgrounds)
   .sort(([a], [b]) => {

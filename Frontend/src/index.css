@@ -208,7 +208,7 @@ button:focus-visible {
   -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 24px, black calc(100% - 24px), transparent 100%);
 }
 
-/* ── Dashboard glass bar (smooth blur entrance) ──────────── */
+/* ── Glass bar / panel (smooth blur entrance after page transition) ── */
 
 @keyframes glass-bar-enter {
   0% {
@@ -227,6 +227,23 @@ button:focus-visible {
   }
 }
 
+@keyframes glass-panel-enter {
+  0% {
+    backdrop-filter: blur(0px) saturate(100%);
+    -webkit-backdrop-filter: blur(0px) saturate(100%);
+    background: rgba(255,255,255,0);
+    border-color: rgba(255,255,255,0);
+    box-shadow: none;
+  }
+  100% {
+    backdrop-filter: blur(40px) saturate(200%);
+    -webkit-backdrop-filter: blur(40px) saturate(200%);
+    background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%);
+    border-color: rgba(255,255,255,0.12);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+}
+
 .glass-bar-dashboard {
   background: rgba(255,255,255,0.06);
   backdrop-filter: blur(20px);
@@ -234,4 +251,14 @@ button:focus-visible {
   border: 1px solid rgba(255,255,255,0.1);
   box-shadow: 0 4px 24px rgba(0,0,0,0.3);
   animation: glass-bar-enter 0.5s cubic-bezier(0.33, 1, 0.68, 1) 0.35s both;
+}
+
+.glass-panel {
+  border-radius: 1rem;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.04) 100%);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06);
+  animation: glass-panel-enter 0.4s cubic-bezier(0.33, 1, 0.68, 1) 0.32s both;
 }

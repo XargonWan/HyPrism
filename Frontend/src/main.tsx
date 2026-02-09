@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import { AccentColorProvider } from './contexts/AccentColorContext';
-import './i18n';
+import { initI18n } from './i18n';
 import './index.css';
 
 // Error boundary to catch crashes
@@ -34,12 +34,17 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
   }
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <AccentColorProvider>
-        <App />
-      </AccentColorProvider>
-    </ErrorBoundary>
-  </React.StrictMode>
-);
+// Initialize i18n from backend, then render the app
+initI18n().catch((err) => {
+  console.warn('[i18n] init failed, rendering with fallback keys:', err);
+}).finally(() => {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <AccentColorProvider>
+          <App />
+        </AccentColorProvider>
+      </ErrorBoundary>
+    </React.StrictMode>
+  );
+});

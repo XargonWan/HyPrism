@@ -5,6 +5,7 @@ import { GameBranch, Language } from '../constants/enums';
 import { LANGUAGE_CONFIG } from '../constants/languages';
 import { ipc } from '@/lib/ipc';
 import { useAccentColor } from '../contexts/AccentColorContext';
+import { changeLanguage } from '../i18n';
 
 interface LanguageSelectorProps {
     currentBranch?: string;
@@ -25,15 +26,13 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
     const [dontAskAgain, setDontAskAgain] = useState(false);
 
     const handleLanguageSelect = async (langCode: Language) => {
-        i18n.changeLanguage(langCode);
         setIsOpen(false);
 
-        // Update game language files
         try {
-            await ipc.i18n.set(langCode);
-            console.log(`Game language set to: ${langCode}`);
+            await changeLanguage(langCode);
+            console.log(`Language set to: ${langCode}`);
         } catch (error) {
-            console.warn('Failed to set game language:', error);
+            console.warn('Failed to change language:', error);
         }
 
         if (localStorage.getItem('suppressTranslationPrompt') === 'true') {
@@ -115,7 +114,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
                         e.currentTarget.style.backgroundColor = '';
                     }}
                 >
-                    <span className="font-bold text-sm">{i18n.language.toUpperCase()}</span>
+                    <span className="font-bold text-sm">{i18n.language.split('-')[0].toUpperCase()}</span>
                     <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 text-xs bg-black/90 text-white rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
                         {t('Change Language')}
                     </span>

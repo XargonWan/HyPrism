@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { X, Github, Bug, Check, AlertTriangle, ChevronDown, ExternalLink, Power, FolderOpen, Trash2, Settings, Database, Globe, Code, Image, Loader2, Languages, FlaskConical, RotateCcw, Monitor, Zap, Download, HardDrive, Package, RefreshCw, Pin, Box, Wifi } from 'lucide-react';
 import { ipc } from '@/lib/ipc';
+import { changeLanguage } from '../i18n';
 
 // Alias for compatibility — maps to ipc.browser.open
 const BrowserOpenURL = (url: string) => ipc.browser.open(url);
@@ -51,7 +52,6 @@ const GetInstalledVersionsDetailed = _stub<InstalledVersionInfo[]>('GetInstalled
 const ExportInstance = _stub('ExportInstance', '');
 const DeleteGame = _stub('DeleteGame', false);
 const OpenInstanceFolder = _stub('OpenInstanceFolder', undefined as void);
-const SetGameLanguage = async (lang: string) => { await ipc.i18n.set(lang); };
 const ResetOnboarding = _stub('ResetOnboarding', undefined as void);
 const GetShowAlphaMods = _stub('GetShowAlphaMods', false);
 const SetShowAlphaMods = _stub<void>('SetShowAlphaMods', undefined as void);
@@ -63,11 +63,11 @@ import { DiscordIcon } from './icons/DiscordIcon';
 import { Language } from '../constants/enums';
 import { LANGUAGE_CONFIG } from '../constants/languages';
 import { ACCENT_COLORS, SOLID_COLORS } from '../constants/colors';
-import appIcon from '../assets/appicon.png';
+import appIcon from '../assets/images/appicon.png';
 
 // Import background images for previews
-const backgroundModulesJpg = import.meta.glob('../assets/bg_*.jpg', { query: '?url', import: 'default', eager: true });
-const backgroundModulesPng = import.meta.glob('../assets/bg_*.png', { query: '?url', import: 'default', eager: true });
+const backgroundModulesJpg = import.meta.glob('../assets/backgrounds/bg_*.jpg', { query: '?url', import: 'default', eager: true });
+const backgroundModulesPng = import.meta.glob('../assets/backgrounds/bg_*.png', { query: '?url', import: 'default', eager: true });
 const allBackgrounds = { ...backgroundModulesJpg, ...backgroundModulesPng };
 const backgroundImages = Object.entries(allBackgrounds)
   .sort(([a], [b]) => {
@@ -389,15 +389,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }, [onClose, showTranslationConfirm, showAllBackgrounds]);
 
     const handleLanguageSelect = async (langCode: Language) => {
-        i18n.changeLanguage(langCode);
         setIsLanguageOpen(false);
 
-        // Update game language files
         try {
-            await SetGameLanguage(langCode);
-            console.log(`Game language set to: ${langCode}`);
+            await changeLanguage(langCode);
+            console.log(`Language set to: ${langCode}`);
         } catch (error) {
-            console.warn('Failed to set game language:', error);
+            console.warn('Failed to change language:', error);
         }
 
         if (localStorage.getItem('suppressTranslationPrompt') === 'true') {

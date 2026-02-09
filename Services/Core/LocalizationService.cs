@@ -60,7 +60,7 @@ public class LocalizationService : ILocalizationService
 
         var result = new Dictionary<string, string>();
         var assembly = Assembly.GetExecutingAssembly();
-        // Standard namespace + folder structure "HyPrism.Assets.Locales." 
+        // Standard namespace + folder structure "HyPrism.Locales." 
         // But let's filter generically to be safe
         var suffix = ".json";
 
@@ -70,7 +70,7 @@ public class LocalizationService : ILocalizationService
         {
             if (resourceName.Contains(".Locales.") && resourceName.EndsWith(suffix))
             {
-                // Extract code: HyPrism.Assets.Locales.en-US.json -> en-US
+                // Extract code: HyPrism.Locales.en-US.json -> en-US
                 // We assume the segment between Locales. and .json is the code
                 // But we must handle cases where prefix is different if namespace changed
                 
@@ -232,7 +232,7 @@ public class LocalizationService : ILocalizationService
     private Dictionary<string, string>? LoadLanguageInternal(string languageCode)
     {
         var assembly = Assembly.GetExecutingAssembly();
-        var resourceName = $"HyPrism.Assets.Locales.{languageCode}.json";
+        var resourceName = $"HyPrism.Locales.{languageCode}.json";
         
         try
         {

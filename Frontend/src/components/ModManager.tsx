@@ -1267,7 +1267,7 @@ export const ModManager: React.FC<ModManagerProps> = ({
             <>
               {/* Portal action buttons to page header in pageMode */}
               {isPageMode && headerActionsRef?.current && createPortal(
-                <div className="flex items-center gap-1">{actionButtons}</div>,
+                <div className="flex items-center gap-0.5 px-1.5 py-1 glass-panel">{actionButtons}</div>,
                 headerActionsRef.current
               )}
 

@@ -97,7 +97,7 @@ const WrapperLaunch = stub('WrapperLaunch', true);
 const SetLauncherBranch = stub<void>('SetLauncherBranch', undefined as void);
 const CheckRosettaStatus = stub<{ NeedsInstall: boolean; Message: string; Command: string; TutorialUrl?: string } | null>('CheckRosettaStatus', null);
 const _GetDiscordLink = stub('GetDiscordLink', 'https://discord.gg/hyprism');
-import appIcon from './assets/appicon.png';
+import appIcon from './assets/images/appicon.png';
 
 // Modal loading fallback - minimal spinner
 const ModalFallback = () => (
@@ -173,6 +173,8 @@ const App: React.FC = () => {
   const [isGameRunning, setIsGameRunning] = useState<boolean>(false);
   const [downloaded, setDownloaded] = useState<number>(0);
   const [total, setTotal] = useState<number>(0);
+  const [launchState, setLaunchState] = useState<string>('');
+  const [launchDetail, setLaunchDetail] = useState<string>('');
 
   // Update state
   const [updateAsset, setUpdateAsset] = useState<any>(null);
@@ -560,26 +562,39 @@ const App: React.FC = () => {
     // Event listeners
     const unsubProgress = EventsOn('progress-update', (data: any) => {
       // Handle cancellation first
-      if (data.stage === 'cancelled') {
+      if (data.state === 'cancelled') {
         console.log('Download cancelled event received');
         setIsDownloading(false);
         setProgress(0);
         setDownloaded(0);
         setTotal(0);
+        setLaunchState('');
+        setLaunchDetail('');
         setDownloadState('downloading');
         return;
       }
 
-      setProgress(data.progress);
-      setDownloaded(data.downloaded);
-      setTotal(data.total);
+      setProgress(data.progress ?? 0);
+      setDownloaded(data.downloadedBytes ?? 0);
+      setTotal(data.totalBytes ?? 0);
+      setLaunchState(data.state ?? '');
+      
+      // Build launch detail from messageKey and args
+      const key = data.messageKey || '';
+      const args = Array.isArray(data.args) ? data.args : [];
+      // Simple interpolation: replace {0}, {1}, etc. with args (use regex for global replace)
+      let detail = key;
+      args.forEach((arg: any, i: number) => {
+        detail = detail.replace(new RegExp(`\\{${i}\\}`, 'g'), String(arg));
+      });
+      setLaunchDetail(detail);
 
-      // Update download state based on stage or progress ranges
-      if (data.stage === 'download' || data.stage === 'update') {
+      // Update download state based on state field
+      if (data.state === 'download' || data.state === 'update') {
         setDownloadState('downloading');
-      } else if (data.stage === 'install') {
+      } else if (data.state === 'install') {
         setDownloadState('extracting');
-      } else if (data.stage === 'complete') {
+      } else if (data.state === 'complete') {
         setDownloadState('launching');
         // Game is now installed, update state
         if (data.progress >= 100) {
@@ -1017,20 +1032,25 @@ const App: React.FC = () => {
     );
   }
 
-  // Helper to get combined news
-  const getCombinedNews = async (count: number) => {
-    const releases = await fetchLauncherReleases(i18n.language);
-    const hytale = await GetNews(Math.max(0, count));
-    const hytaleItems = (hytale || []).map((item: any) => {
+  // Helper to get combined news from backend (already includes both hytale + hyprism)
+  const getCombinedNews = async (_count: number) => {
+    const raw = await GetNews(_count);
+    return (raw || []).map((item: any) => {
       const dateMs = parseDateMs(item?.publishedAt || item?.date);
       return {
-        item: { ...item, source: 'hytale' as const, date: formatDateConsistent(dateMs, i18n.language) },
-        dateMs
+        title: item?.title || '',
+        excerpt: item?.excerpt || item?.description || '',
+        url: item?.url || '',
+        date: dateMs ? formatDateConsistent(dateMs, i18n.language) : (item?.date || ''),
+        author: item?.author || '',
+        imageUrl: item?.imageUrl || item?.coverImageUrl || '',
+        source: item?.source || 'hytale',
       };
+    }).sort((a: any, b: any) => {
+      const aMs = parseDateMs(a.date);
+      const bMs = parseDateMs(b.date);
+      return bMs - aMs;
     });
-    return [...releases, ...hytaleItems]
-      .sort((a, b) => b.dateMs - a.dateMs)
-      .map((x) => x.item);
   };
 
   const handleInstanceDeleted = async () => {
@@ -1090,6 +1110,8 @@ const App: React.FC = () => {
               progress={progress}
               downloaded={downloaded}
               total={total}
+              launchState={launchState}
+              launchDetail={launchDetail}
               currentBranch={currentBranch}
               currentVersion={currentVersion}
               availableVersions={availableVersions}

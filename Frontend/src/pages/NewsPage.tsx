@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw, ExternalLink, Calendar, User, Newspaper } from 'lucide-react';
+import { RefreshCw, ExternalLink, Calendar, User, Newspaper, Github } from 'lucide-react';
 import { useAccentColor } from '../contexts/AccentColorContext';
 import { ipc } from '@/lib/ipc';
 
@@ -57,8 +57,8 @@ export const NewsPage: React.FC<NewsPageProps> = memo(({ getNews, newsDisabled }
       setNews((prev) => {
         if (reset) return items;
         const seen = new Map<string, EnrichedNewsItem>();
-        prev.forEach((item) => seen.set(item.url + item.title, item));
-        (items || []).forEach((item) => seen.set(item.url + item.title, item));
+        prev.forEach((item) => seen.set(item.url || item.title, item));
+        (items || []).forEach((item) => seen.set(item.url || item.title, item));
         return Array.from(seen.values());
       });
     } catch (err) {
@@ -106,7 +106,7 @@ export const NewsPage: React.FC<NewsPageProps> = memo(({ getNews, newsDisabled }
       animate="animate"
       exit="exit"
       transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="h-full flex flex-col px-8 pt-14 pb-20"
+      className="h-full flex flex-col px-8 pt-14 pb-28"
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-6 flex-shrink-0">
@@ -167,29 +167,32 @@ export const NewsPage: React.FC<NewsPageProps> = memo(({ getNews, newsDisabled }
             <AnimatePresence>
               {filteredNews.map((item, index) => (
                 <motion.button
-                  key={item.url + item.title}
+                  key={item.url || item.title}
                   custom={index}
                   variants={cardVariants}
                   initial="hidden"
                   animate="visible"
-                  whileHover={{ scale: 1.02, y: -4 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={() => item.url && openLink(item.url)}
                   className="relative group rounded-2xl overflow-hidden text-left cursor-pointer"
                   style={{
-                    aspectRatio: item.source === 'hyprism' ? '16/10' : '16/10',
+                    aspectRatio: '16/10',
                     background: 'rgba(255,255,255,0.04)',
                     border: '1px solid rgba(255,255,255,0.08)',
                   }}
                 >
-                  {/* Background Image */}
-                  {item.imageUrl && (
+                  {/* Background Image or Placeholder */}
+                  {item.source === 'hyprism' ? (
+                    <div className="absolute inset-0 bg-gradient-to-br from-[#2a2a2a] to-[#1a1a1a] flex items-center justify-center">
+                      <Github size={64} className="text-white/10" />
+                    </div>
+                  ) : item.imageUrl ? (
                     <img
                       src={item.imageUrl}
                       alt={item.title}
-                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                      className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
-                  )}
+                  ) : null}
 
                   {/* Gradient Overlay */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
@@ -209,6 +212,22 @@ export const NewsPage: React.FC<NewsPageProps> = memo(({ getNews, newsDisabled }
                     </div>
                   )}
 
+                  {/* Read More glass icon - right side, visible on hover */}
+                  <div className="absolute top-3 right-3 z-10 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-300">
+                    <span
+                      className="flex items-center justify-center w-8 h-8 rounded-xl"
+                      style={{
+                        background: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.06) 100%)',
+                        backdropFilter: 'blur(20px)',
+                        WebkitBackdropFilter: 'blur(20px)',
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                      }}
+                    >
+                      <ExternalLink size={14} className="text-white" />
+                    </span>
+                  </div>
+
                   {/* Content */}
                   <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
                     <h3 className="text-white font-bold text-sm line-clamp-2 mb-1 drop-shadow-lg">
@@ -224,17 +243,6 @@ export const NewsPage: React.FC<NewsPageProps> = memo(({ getNews, newsDisabled }
                       {item.date && (
                         <span className="flex items-center gap-1"><Calendar size={10} />{item.date}</span>
                       )}
-                    </div>
-
-                    {/* Read More - visible on hover */}
-                    <div className="mt-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
-                      <span
-                        className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1 rounded-lg"
-                        style={{ backgroundColor: `${accentColor}dd`, color: accentTextColor }}
-                      >
-                        <ExternalLink size={12} />
-                        {t('Read more')}
-                      </span>
                     </div>
                   </div>
                 </motion.button>

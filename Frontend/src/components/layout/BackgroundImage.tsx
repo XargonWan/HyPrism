@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 
 // Import all bg_*.jpg and bg_*.png backgrounds
-const backgroundModulesJpg = import.meta.glob('../../assets/bg_*.jpg', { query: '?url', import: 'default', eager: true });
-const backgroundModulesPng = import.meta.glob('../../assets/bg_*.png', { query: '?url', import: 'default', eager: true });
+const backgroundModulesJpg = import.meta.glob('../../assets/backgrounds/bg_*.jpg', { query: '?url', import: 'default', eager: true });
+const backgroundModulesPng = import.meta.glob('../../assets/backgrounds/bg_*.png', { query: '?url', import: 'default', eager: true });
 
 // Combine and sort by number
 const allBackgrounds = { ...backgroundModulesJpg, ...backgroundModulesPng };
