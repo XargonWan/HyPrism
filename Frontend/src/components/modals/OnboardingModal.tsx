@@ -38,7 +38,6 @@ import { Language } from '../../constants/enums';
 import { LANGUAGE_CONFIG } from '../../constants/languages';
 import { ACCENT_COLORS } from '../../constants/colors';
 import appIcon from '../../assets/images/appicon.png';
-import { SOLID_COLORS } from '../../constants/colors';
 
 // Background images (matching SettingsModal) - using the correct path
 const backgroundModulesJpg = import.meta.glob('../../assets/backgrounds/bg_*.jpg', { query: '?url', import: 'default', eager: true });
@@ -218,12 +217,11 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
         setIsLoadingContributors(false);
     };
     
-    // Slideshow effect for background - includes images and solid colors
+    // Slideshow effect for background
     useEffect(() => {
         if (backgroundMode === 'slideshow') {
-            const totalOptions = backgroundImages.length + SOLID_COLORS.length;
             const interval = setInterval(() => {
-                setCurrentBackgroundIndex(prev => (prev + 1) % totalOptions);
+                setCurrentBackgroundIndex(prev => (prev + 1) % backgroundImages.length);
             }, 8000);
             return () => clearInterval(interval);
         }
@@ -372,40 +370,14 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
     
     const currentStepIndex = steps.findIndex(s => s.id === currentStep);
     
-    // Get current background for preview - includes both images and solid colors
+    // Get current background for preview
     const getCurrentBackground = () => {
-        const totalOptions = backgroundImages.length + SOLID_COLORS.length;
         if (backgroundMode === 'slideshow') {
-            const index = currentBackgroundIndex % totalOptions;
-            if (index < backgroundImages.length) {
-                return backgroundImages[index]?.url || backgroundImages[0]?.url;
-            } else {
-                // Return null for solid colors - handled separately
-                return null;
-            }
-        }
-        // Check if it's a solid color
-        if (backgroundMode.startsWith('#')) {
-            return null;
+            const index = currentBackgroundIndex % backgroundImages.length;
+            return backgroundImages[index]?.url || backgroundImages[0]?.url;
         }
         const selected = backgroundImages.find(bg => bg.name === backgroundMode);
         return selected?.url || backgroundImages[0]?.url;
-    };
-    
-    // Get current solid color for background
-    const getCurrentSolidColor = () => {
-        const totalOptions = backgroundImages.length + SOLID_COLORS.length;
-        if (backgroundMode === 'slideshow') {
-            const index = currentBackgroundIndex % totalOptions;
-            if (index >= backgroundImages.length) {
-                return SOLID_COLORS[index - backgroundImages.length];
-            }
-            return null;
-        }
-        if (backgroundMode.startsWith('#')) {
-            return backgroundMode;
-        }
-        return null;
     };
     
     // Get maintainer and other contributors
@@ -422,7 +394,6 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
     // Splash Screen Phase
     if (phase === 'splash') {
         const bgImage = getCurrentBackground();
-        const solidColor = getCurrentSolidColor();
         
         return (
             <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden">
@@ -431,7 +402,6 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
                     className="absolute inset-0 bg-cover bg-center transition-all duration-1000"
                     style={{ 
                         backgroundImage: bgImage ? `url(${bgImage})` : 'none',
-                        backgroundColor: solidColor || 'transparent',
                         filter: 'blur(16px) brightness(0.5)',
                         transform: 'scale(1.1)'
                     }}
@@ -531,7 +501,6 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
     
     // Setup Phase - Multi-step wizard
     const bgImage = getCurrentBackground();
-    const solidColor = getCurrentSolidColor();
     
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden">
@@ -540,7 +509,6 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
                 className="absolute inset-0 bg-cover bg-center transition-all duration-1000"
                 style={{ 
                     backgroundImage: bgImage ? `url(${bgImage})` : 'none',
-                    backgroundColor: solidColor || 'transparent',
                     filter: 'blur(20px) brightness(0.3)',
                     transform: 'scale(1.1)'
                 }}
@@ -550,7 +518,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({ onComplete }) 
             <div className="absolute inset-0 bg-black/50" />
             
             {/* Modal */}
-            <div className={`relative z-10 w-full max-w-3xl mx-4 rounded-2xl border border-white/10 overflow-hidden shadow-2xl ${animatedGlass ? 'bg-[#111111]/95 backdrop-blur-xl' : 'bg-[#111111]'}`}>
+            <div className={`relative z-10 w-full max-w-3xl mx-4 overflow-hidden shadow-2xl ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'}`}>
                 {/* Header */}
                 <div className="p-6 border-b border-white/10 bg-gradient-to-r from-[#151515]/80 to-[#111111]/80">
                     <div className="flex items-center justify-between">

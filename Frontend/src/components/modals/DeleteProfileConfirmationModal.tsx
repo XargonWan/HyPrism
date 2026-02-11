@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Trash2, AlertTriangle, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAccentColor } from '../../contexts/AccentColorContext';
+import { useAnimatedGlass } from '../../contexts/AnimatedGlassContext';
 import { ModalOverlay } from './ModalOverlay';
 
 interface DeleteProfileConfirmationModalProps {
@@ -18,6 +19,7 @@ export const DeleteProfileConfirmationModal: React.FC<DeleteProfileConfirmationM
 }) => {
   const { t } = useTranslation();
   const { accentColor } = useAccentColor();
+  const { animatedGlass } = useAnimatedGlass();
   
   return (
     <ModalOverlay zClass="z-[250]" onClick={onCancel}>
@@ -25,7 +27,7 @@ export const DeleteProfileConfirmationModal: React.FC<DeleteProfileConfirmationM
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className="w-full max-w-md bg-[#0d0d0d] rounded-2xl border border-red-500/20 overflow-hidden"
+        className={`w-full max-w-md overflow-hidden ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'} !border-red-500/20`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

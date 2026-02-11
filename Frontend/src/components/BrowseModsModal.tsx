@@ -573,7 +573,7 @@ export const BrowseModsModal: React.FC<BrowseModsModalProps> = ({
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
-          className={`w-full max-w-6xl h-[85vh] bg-[#1a1a1a] rounded-2xl border flex flex-col overflow-hidden transition-colors ${isDragging ? 'border-2' : 'border-white/10'}`}
+          className={`w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden transition-colors ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'} ${isDragging ? '!border-2' : ''}`}
           style={isDragging ? { borderColor: accentColor } : undefined}
         >
           {/* Drag overlay */}

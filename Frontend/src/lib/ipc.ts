@@ -188,6 +188,14 @@ export interface GpuAdapterInfo {
   type: string;
 }
 
+export interface SaveInfo {
+  name: string;
+  path: string;
+  sizeBytes?: number;
+  lastModified?: string;
+  previewPath?: string;
+}
+
 // #endregion
 
 // #region Typed IPC API (from @ipc annotations)
@@ -198,7 +206,7 @@ const _config = {
 };
 
 const _game = {
-  launch: () => send('hyprism:game:launch'),
+  launch: (data?: { branch?: string; version?: number }) => send('hyprism:game:launch', data),
   cancel: () => send('hyprism:game:cancel'),
   instances: () => invoke<InstalledInstance[]>('hyprism:game:instances'),
   isRunning: (data?: unknown) => invoke<boolean>('hyprism:game:isRunning', data),
@@ -247,6 +255,10 @@ const _auth = {
 const _settings = {
   get: () => invoke<SettingsSnapshot>('hyprism:settings:get'),
   update: (data?: unknown) => invoke<{ success: boolean }>('hyprism:settings:update', data),
+  launcherPath: (data?: unknown) => invoke<string>('hyprism:settings:launcherPath', data),
+  defaultInstanceDir: (data?: unknown) => invoke<string>('hyprism:settings:defaultInstanceDir', data),
+  setInstanceDir: (path: string) => invoke<void>('hyprism:settings:setInstanceDir', { path }),
+  setLauncherDataDir: (path: string) => invoke<void>('hyprism:settings:setLauncherDataDir', { path }),
 };
 
 const _i18n = {
@@ -269,6 +281,9 @@ const _browser = {
 const _mods = {
   list: () => invoke<ModItem[]>('hyprism:mods:list'),
   search: (data?: unknown) => invoke<ModSearchResult>('hyprism:mods:search', data),
+  installed: (data?: unknown) => invoke<ModItem[]>('hyprism:mods:installed', data),
+  uninstall: (data?: unknown) => invoke<boolean>('hyprism:mods:uninstall', data),
+  checkUpdates: (data?: unknown) => invoke<ModItem[]>('hyprism:mods:checkUpdates', data),
 };
 
 const _system = {
@@ -279,6 +294,10 @@ const _console = {
   log: (msg: string) => send('hyprism:console:log', msg),
   warn: (msg: string) => send('hyprism:console:warn', msg),
   error: (msg: string) => send('hyprism:console:error', msg),
+};
+
+const _file = {
+  browseFolder: (data?: unknown) => invoke<string | null>('hyprism:file:browseFolder', data),
 };
 
 // #endregion
@@ -299,6 +318,7 @@ export const ipc = {
   mods: _mods,
   system: _system,
   consoleCtl: _console,
+  file: _file,
 };
 
 // #endregion

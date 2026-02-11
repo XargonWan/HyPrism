@@ -78,9 +78,11 @@ public class DownloadService : IDownloadService
             canResume = false;
             existingLength = 0;
         }
-        else
+        else if (!response.IsSuccessStatusCode)
         {
-            response.EnsureSuccessStatusCode();
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            Logger.Error("Download", $"Download failed from {url}: HTTP {(int)response.StatusCode} {response.StatusCode}. Response: {errorBody?.Substring(0, Math.Min(500, errorBody?.Length ?? 0))}");
+            throw new HttpRequestException($"Download failed: HTTP {(int)response.StatusCode} {response.StatusCode}");
         }
         
         // If we didn't get totalBytes from HEAD earlier (e.g. -1), try getting it from response

@@ -300,7 +300,7 @@ button:focus-visible {
 .glass-panel-solid {
   border-radius: 1rem;
   border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(28, 28, 30, 0.98);
+  background: rgb(28, 28, 30);
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }
 
@@ -318,6 +318,6 @@ button:focus-visible {
 .glass-panel-static-solid {
   border-radius: 1rem;
   border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(28, 28, 30, 0.98);
+  background: rgb(28, 28, 30);
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
 }

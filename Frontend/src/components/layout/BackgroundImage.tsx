@@ -39,9 +39,7 @@ export const BackgroundImage: React.FC<BackgroundImageProps> = memo(({ mode = 's
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Determine mode type
-  const isSolidColor = mode?.startsWith('color:');
-  const solidColor = isSolidColor ? mode.replace('color:', '') : null;
-  const isStatic = mode !== 'slideshow' && !isSolidColor;
+  const isStatic = mode !== 'slideshow';
   const staticUrl = isStatic && backgroundMap[mode] ? backgroundMap[mode] : null;
 
   // Initial fade in
@@ -52,7 +50,7 @@ export const BackgroundImage: React.FC<BackgroundImageProps> = memo(({ mode = 's
 
   // Cycle through backgrounds (only in slideshow mode)
   useEffect(() => {
-    if (isStatic || isSolidColor || backgroundImages.length <= 1) return;
+    if (isStatic || backgroundImages.length <= 1) return;
 
     const cycleBackground = () => {
       setIsVisible(false);
@@ -69,7 +67,7 @@ export const BackgroundImage: React.FC<BackgroundImageProps> = memo(({ mode = 's
       clearTimeout(interval);
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-  }, [currentIndex, isStatic, isSolidColor]);
+  }, [currentIndex, isStatic]);
 
   const currentImageUrl = staticUrl || backgroundImages[currentIndex]?.url;
 
@@ -77,34 +75,20 @@ export const BackgroundImage: React.FC<BackgroundImageProps> = memo(({ mode = 's
     <>
       {/* Background container */}
       <div className="absolute inset-0 overflow-hidden bg-black">
-        {/* Solid color background */}
-        {isSolidColor && solidColor && (
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundColor: solidColor,
-              transition: `opacity ${TRANSITION_DURATION}ms ease-in-out`,
-              opacity: isVisible ? 1 : 0,
-            }}
-          />
-        )}
-        
         {/* Background image - no parallax, just fade transitions */}
-        {!isSolidColor && (
-          <div
-            className="absolute inset-0"
-            style={{
-              transition: `opacity ${TRANSITION_DURATION}ms ease-in-out`,
-              opacity: isVisible ? 1 : 0,
-            }}
-          >
-            <img
-              src={currentImageUrl}
-              alt=""
-              className="w-full h-full object-cover"
-            />
-          </div>
-        )}
+        <div
+          className="absolute inset-0"
+          style={{
+            transition: `opacity ${TRANSITION_DURATION}ms ease-in-out`,
+            opacity: isVisible ? 1 : 0,
+          }}
+        >
+          <img
+            src={currentImageUrl}
+            alt=""
+            className="w-full h-full object-cover"
+          />
+        </div>
         
         {/* Vignette effect */}
         <div 

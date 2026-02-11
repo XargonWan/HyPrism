@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { X, Terminal, Loader2, Download, Copy, Check } from 'lucide-react';
 import { useAccentColor } from '../../contexts/AccentColorContext';
+import { useAnimatedGlass } from '../../contexts/AnimatedGlassContext';
 import { ModalOverlay } from './ModalOverlay';
 
 interface LogsModalProps {
@@ -16,6 +17,7 @@ export const LogsModal: React.FC<LogsModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const { accentColor } = useAccentColor();
+  const { animatedGlass } = useAnimatedGlass();
   const [logs, setLogs] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [copied, setCopied] = useState(false);
@@ -85,7 +87,7 @@ export const LogsModal: React.FC<LogsModalProps> = ({
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className="w-full max-w-3xl h-[80vh] bg-[#0d0d0d] rounded-2xl border border-white/10 overflow-hidden flex flex-col"
+        className={`w-full max-w-3xl h-[80vh] overflow-hidden flex flex-col ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'}`}
       >
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-white/10 flex-shrink-0">

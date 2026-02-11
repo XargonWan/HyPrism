@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { X, Github, Bug, Check, AlertTriangle, ChevronDown, ExternalLink, Power, FolderOpen, Trash2, Settings, Database, Globe, Code, Image, Loader2, Languages, FlaskConical, RotateCcw, Monitor, Zap, Download, HardDrive, Package, RefreshCw, Pin, Box, Wifi, Sparkles, Server, Edit3 } from 'lucide-react';
+import { X, Github, Bug, Check, AlertTriangle, ChevronDown, ExternalLink, Power, FolderOpen, Trash2, Settings, Database, Globe, Code, Image, Loader2, FlaskConical, RotateCcw, Monitor, Zap, Download, HardDrive, Package, Box, Wifi, Sparkles, Server, Edit3 } from 'lucide-react';
 import { ipc } from '@/lib/ipc';
 import { changeLanguage } from '../i18n';
 
@@ -31,39 +31,37 @@ async function GetBackgroundMode(): Promise<string> { return (await ipc.settings
 async function SetBackgroundMode(v: string): Promise<void> { await ipc.settings.update({ backgroundMode: v }); }
 async function GetCustomInstanceDir(): Promise<string> { return (await ipc.settings.get()).dataDirectory ?? ''; }
 async function GetNick(): Promise<string> { return (await ipc.profile.get()).nick ?? 'HyPrism'; }
-async function SetNick(name: string): Promise<void> { console.warn('[IPC] SetNick: no dedicated channel'); }
 async function GetUUID(): Promise<string> { return (await ipc.profile.get()).uuid ?? ''; }
-async function SetUUID(uuid: string): Promise<void> { console.warn('[IPC] SetUUID: no dedicated channel'); }
 async function GetAvatarPreview(): Promise<string | null> { return (await ipc.profile.get()).avatarPath ?? null; }
 async function GetAuthDomain(): Promise<string> { return (await ipc.settings.get()).authDomain ?? 'sessions.sanasol.ws'; }
 async function GetDiscordLink(): Promise<string> { console.warn('[IPC] GetDiscordLink: stub'); return 'https://discord.gg/hyprism'; }
 
-// TODO: These need dedicated IPC channels
+// Real IPC functions that now have channels
+async function GetLauncherFolderPath(): Promise<string> { return ipc.settings.launcherPath(); }
+async function GetDefaultInstanceDir(): Promise<string> { return ipc.settings.defaultInstanceDir(); }
+async function SetInstanceDirectory(path: string): Promise<void> { await ipc.settings.setInstanceDir(path); }
+async function BrowseFolder(initialPath?: string): Promise<string> { return (await ipc.file.browseFolder(initialPath)) ?? ''; }
+async function GetLauncherDataDirectory(): Promise<string> { return (await ipc.settings.get()).dataDirectory ?? ''; }
+async function SetLauncherDataDirectory(path: string): Promise<void> { await ipc.settings.setLauncherDataDir(path); }
+
+// TODO: These still need dedicated IPC channels
 const _stub = <T,>(name: string, fb: T) => async (..._a: any[]): Promise<T> => { console.warn(`[IPC] ${name}: no channel`); return fb; };
 const OpenLauncherFolder = _stub('OpenLauncherFolder', undefined as void);
 const DeleteLauncherData = _stub('DeleteLauncherData', true);
-const GetLauncherFolderPath = _stub('GetLauncherFolderPath', '');
-const GetDefaultInstanceDir = _stub('GetDefaultInstanceDir', '');
-const SetInstanceDirectory = _stub<void>('SetInstanceDirectory', undefined as void);
-const BrowseFolder = _stub('BrowseFolder', '');
-const GetLauncherDataDirectory = _stub('GetLauncherDataDirectory', '');
-const SetLauncherDataDirectory = _stub<void>('SetLauncherDataDirectory', undefined as void);
 const GetInstalledVersionsDetailed = _stub<InstalledVersionInfo[]>('GetInstalledVersionsDetailed', []);
 const ExportInstance = _stub('ExportInstance', '');
 const DeleteGame = _stub('DeleteGame', false);
-const OpenInstanceFolder = _stub('OpenInstanceFolder', undefined as void);
 const ResetOnboarding = _stub('ResetOnboarding', undefined as void);
 const GetShowAlphaMods = _stub('GetShowAlphaMods', false);
 const SetShowAlphaMods = _stub<void>('SetShowAlphaMods', undefined as void);
 const ImportInstanceFromZip = _stub('ImportInstanceFromZip', true);
 const InstallOptimizationMods = _stub('InstallOptimizationMods', true);
-const GetLastExportPath = _stub('GetLastExportPath', '');
 import { useAccentColor } from '../contexts/AccentColorContext';
 import { useAnimatedGlass } from '../contexts/AnimatedGlassContext';
 import { DiscordIcon } from './icons/DiscordIcon';
 import { Language } from '../constants/enums';
 import { LANGUAGE_CONFIG } from '../constants/languages';
-import { ACCENT_COLORS, SOLID_COLORS } from '../constants/colors';
+import { ACCENT_COLORS } from '../constants/colors';
 import appIcon from '../assets/images/appicon.png';
 
 // Import background images for previews
@@ -152,10 +150,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const [installedInstances, setInstalledInstances] = useState<InstalledVersionInfo[]>([]);
     const [isLoadingInstances, setIsLoadingInstances] = useState(false);
     const [exportingInstance, setExportingInstance] = useState<string | null>(null);
-    const [exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const [_exportMessage, setExportMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
     const [instanceToDelete, setInstanceToDelete] = useState<InstalledVersionInfo | null>(null);
     const [isImportingInstance, setIsImportingInstance] = useState(false);
-    const [isDraggingZip, setIsDraggingZip] = useState(false);
     const [showImportModal, setShowImportModal] = useState<{ zipBase64: string; fileName: string } | null>(null);
     const [importTargetBranch, setImportTargetBranch] = useState<'release' | 'pre-release'>('release');
     const [importTargetVersion, setImportTargetVersion] = useState<number>(0);
@@ -163,17 +160,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const [instanceExportPath, setInstanceExportPath] = useState<string>('');
 
     // Profile state
-    const [profileUsername, setProfileUsername] = useState('');
+    const [_profileUsername, setProfileUsername] = useState('');
     const [profileUuid, setProfileUuid] = useState('');
-    const [editingUsername, setEditingUsername] = useState(false);
-    const [editingUuid, setEditingUuid] = useState(false);
     const [editUsernameValue, setEditUsernameValue] = useState('');
     const [editUuidValue, setEditUuidValue] = useState('');
-    const [copiedUuid, setCopiedUuid] = useState(false);
     const [authDomain, setAuthDomain] = useState('sessions.sanasol.ws');
     const [authMode, setAuthModeState] = useState<'default' | 'official' | 'custom'>('default');
     const [customAuthDomain, setCustomAuthDomain] = useState('');
-    const [localAvatar, setLocalAvatar] = useState<string | null>(null);
+    const [_localAvatar, setLocalAvatar] = useState<string | null>(null);
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -346,27 +340,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         setInstanceToDelete(null);
     };
     
-    const handleInstanceZipDrop = async (e: React.DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDraggingZip(false);
-        
-        const file = e.dataTransfer.files[0];
-        if (!file || !file.name.toLowerCase().endsWith('.zip')) {
-            return;
-        }
-        
-        // Read file as base64
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const base64 = (event.target?.result as string)?.split(',')[1];
-            if (base64) {
-                setShowImportModal({ zipBase64: base64, fileName: file.name });
-            }
-        };
-        reader.readAsDataURL(file);
-    };
-    
     const handleImportInstance = async () => {
         if (!showImportModal) return;
         
@@ -384,14 +357,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         }
         setIsImportingInstance(false);
         setShowImportModal(null);
-    };
-    
-    const formatSize = (bytes: number): string => {
-        if (bytes === 0) return '0 B';
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     };
 
     useEffect(() => {
@@ -639,52 +604,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         });
     };
 
-    const handleSaveUsername = async () => {
-        if (editUsernameValue.trim() && editUsernameValue.length <= 16) {
-            try {
-                await SetNick(editUsernameValue.trim());
-                setProfileUsername(editUsernameValue.trim());
-                setEditingUsername(false);
-            } catch (err) {
-                console.error('Failed to save username:', err);
-            }
-        }
-    };
-
-    const handleSaveUuid = async () => {
-        const trimmed = editUuidValue.trim();
-        if (trimmed) {
-            try {
-                await SetUUID(trimmed);
-                setProfileUuid(trimmed);
-                setEditingUuid(false);
-            } catch (err) {
-                console.error('Failed to save UUID:', err);
-            }
-        }
-    };
-
-    const handleRandomizeUuid = () => {
-        const newUuid = generateUUID();
-        setEditUuidValue(newUuid);
-    };
-
-    const handleCopyUuid = async () => {
-        try {
-            await navigator.clipboard.writeText(profileUuid);
-            setCopiedUuid(true);
-            setTimeout(() => setCopiedUuid(false), 2000);
-        } catch (err) {
-            console.error('Failed to copy UUID:', err);
-        }
-    };
-
-    // Get avatar head URL from auth server
-    const getAvatarHeadUrl = (uuid: string) => {
-        const domain = authDomain || DEFAULT_AUTH_DOMAIN;
-        return `https://${domain}/avatar/${uuid}/head?bg=transparent`;
-    };
-
     const truncateName = (name: string, maxLength: number = 10) => {
         if (name.length <= maxLength) return name;
         return name.slice(0, maxLength - 2) + '...';
@@ -698,13 +617,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     return (
         <>
             <div className={isPageMode
-                ? "w-full h-full"
+                ? "w-full h-full flex gap-4"
                 : `fixed inset-0 z-[200] flex items-center justify-center ${animatedGlass ? 'bg-black/60 modal-overlay-glass' : 'bg-[#0a0a0a]/90'}`
             }>
-                <div className={`bg-[#1c1c1e] border border-white/[0.06] rounded-2xl shadow-2xl flex overflow-hidden ${isPageMode ? 'w-full h-full' : 'mx-4'}`} style={isPageMode ? undefined : { width: '800px', height: '600px' }}>
-                    {/* Sidebar  */}
-                    <div className={`w-52 border-r border-white/[0.06] flex flex-col py-4 ${animatedGlass ? 'bg-[#1c1c1e]/80 backdrop-blur-xl' : 'bg-[#1c1c1e]'}`}>
-                        <h2 className="text-lg font-bold text-white px-4 mb-4">{t('settings.title')}</h2>
+                {/* In modal mode, constrain width/height; in page mode, 'contents' makes this invisible to layout */}
+                <div className={isPageMode
+                    ? "contents"
+                    : "w-full max-w-4xl mx-4 max-h-[85vh] flex gap-2 relative"
+                }>
+                    {/* Sidebar - Independent glass panel */}
+                    <div className={`${isPageMode ? 'w-52' : 'w-48'} flex-shrink-0 flex flex-col py-4 rounded-2xl ${animatedGlass ? 'glass-panel' : 'glass-panel-static-solid'}`}>
                         <nav className="flex-1 space-y-1 px-2">
                             {tabs.map((tab) => (
                                 <button
@@ -745,17 +667,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         </div>
                     </div>
 
-                    {/* Content */}
-                    <div className="flex-1 flex flex-col min-w-0">
+                    {/* Content - Independent glass panel */}
+                    <div className={`flex-1 flex flex-col min-w-0 overflow-hidden rounded-2xl ${animatedGlass ? 'glass-panel' : 'glass-panel-static-solid'}`}>
                         {/* Header */}
                         <div className="flex items-center justify-between p-4 border-b border-white/[0.06]">
                             <h3 className="text-white font-medium">{tabs.find(t => t.id === activeTab)?.label}</h3>
-                            {!isPageMode && (
-                                <button
-                                    onClick={onClose}
-                                    className="p-2 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
-                                >
-                                    <X size={20} />
+                            {!isPageMode && onClose && (
+                                <button onClick={onClose} className="p-2 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors">
+                                    <X size={18} />
                                 </button>
                             )}
                         </div>
@@ -904,7 +823,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                     <div className="space-y-3">
                                         {/* Close After Launch */}
                                         <div 
-                                            className="flex items-center justify-between p-4 rounded-xl bg-[#2c2c2e] border border-white/[0.06] cursor-pointer hover:border-white/[0.12] transition-all"
+                                            className="flex items-center justify-between p-4 rounded-2xl bg-[#2c2c2e] border border-white/[0.06] cursor-pointer hover:border-white/[0.12] transition-all"
                                             onClick={handleCloseAfterLaunchChange}
                                         >
                                             <div className="flex items-center gap-3">
@@ -929,7 +848,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                                         {/* Show Alpha Mods Toggle */}
                                         <div 
-                                            className="flex items-center justify-between p-4 rounded-xl bg-[#2c2c2e] border border-white/[0.06] cursor-pointer hover:border-white/[0.12] transition-all"
+                                            className="flex items-center justify-between p-4 rounded-2xl bg-[#2c2c2e] border border-white/[0.06] cursor-pointer hover:border-white/[0.12] transition-all"
                                             onClick={async () => {
                                                 const newValue = !showAlphaMods;
                                                 setShowAlphaModsState(newValue);
@@ -1034,33 +953,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                             </div>
                                         </div>
 
-                                        {/* Solid colors section */}
-                                        <div className="mt-3 p-3 rounded-xl bg-[#0f0f0f] border border-white/5">
-                                            <p className="text-xs text-white/40 mb-2">{t('settings.visualSettings.solidColors')}</p>
-                                            <div className="grid grid-cols-8 gap-2">
-                                                {SOLID_COLORS.map((color) => (
-                                                    <div
-                                                        key={color}
-                                                        className="aspect-square rounded-lg cursor-pointer border-2 transition-all flex items-center justify-center"
-                                                        style={{
-                                                            backgroundColor: color,
-                                                            borderColor: backgroundMode === `color:${color}` ? accentColor : 'transparent',
-                                                            boxShadow: backgroundMode === `color:${color}` ? `0 0 0 2px ${accentColor}30` : 'none'
-                                                        }}
-                                                        onClick={() => handleBackgroundModeChange(`color:${color}`)}
-                                                    >
-                                                        {backgroundMode === `color:${color}` && (
-                                                            <Check size={14} className="text-white drop-shadow-lg" />
-                                                        )}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
                                     </div>
 
                                     {/* Disable News Toggle */}
                                     <div 
-                                        className="flex items-center justify-between p-4 rounded-xl bg-[#2c2c2e] border border-white/[0.06] cursor-pointer hover:border-white/[0.12] transition-all"
+                                        className="flex items-center justify-between p-4 rounded-2xl bg-[#2c2c2e] border border-white/[0.06] cursor-pointer hover:border-white/[0.12] transition-all"
                                         onClick={() => handleDisableNewsChange(!disableNews)}
                                     >
                                         <div className="flex items-center gap-3">
@@ -1085,7 +982,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                                     {/* Animated Glass Effects Toggle */}
                                     <div 
-                                        className="flex items-center justify-between p-4 rounded-xl bg-[#2c2c2e] border border-white/[0.06] cursor-pointer hover:border-white/[0.12] transition-all"
+                                        className="flex items-center justify-between p-4 rounded-2xl bg-[#2c2c2e] border border-white/[0.06] cursor-pointer hover:border-white/[0.12] transition-all"
                                         onClick={() => handleAnimatedGlassChange(!animatedGlass)}
                                     >
                                         <div className="flex items-center gap-3">
@@ -1116,7 +1013,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                     {/* Online Mode Toggle */}
                                     <div className="space-y-3">
                                         <div 
-                                            className="flex items-center justify-between p-4 rounded-xl bg-[#2c2c2e] border border-white/[0.06] cursor-pointer hover:border-white/[0.12] transition-all"
+                                            className="flex items-center justify-between p-4 rounded-2xl bg-[#2c2c2e] border border-white/[0.06] cursor-pointer hover:border-white/[0.12] transition-all"
                                             onClick={async () => {
                                                 const newValue = !onlineMode;
                                                 setOnlineMode(newValue);
@@ -1618,7 +1515,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                     </div>
 
                                     {/* Disclaimer */}
-                                    <div className="p-4 rounded-xl bg-[#2c2c2e] border border-white/[0.04]">
+                                    <div className="p-4 rounded-2xl bg-[#2c2c2e] border border-white/[0.04]">
                                         <p className="text-white/50 text-sm text-center">
                                             {t('settings.aboutSettings.disclaimer')}
                                         </p>
@@ -1648,7 +1545,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                     </div>
 
                                     {/* Show Intro on Next Launch */}
-                                    <div className="p-4 rounded-xl bg-[#2c2c2e] border border-white/[0.04] space-y-4">
+                                    <div className="p-4 rounded-2xl bg-[#2c2c2e] border border-white/[0.04] space-y-4">
                                         <h3 className="text-white font-medium text-sm">{t('settings.developerSettings.onboarding')}</h3>
                                         <button
                                             onClick={async () => {
@@ -1661,7 +1558,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                         </button>
                                     </div>
 
-                                    <div className="p-4 rounded-xl bg-[#2c2c2e] border border-white/[0.04]">
+                                    <div className="p-4 rounded-2xl bg-[#2c2c2e] border border-white/[0.04]">
                                         <p className="text-white/40 text-xs">
                                             {t('settings.developerSettings.debugInfo')} Tab={activeTab}, Branch={selectedLauncherBranch}, Accent={accentColor}
                                         </p>
@@ -1676,7 +1573,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Translation Confirmation Modal */}
             {showTranslationConfirm && (
                 <div className={`fixed inset-0 z-[250] flex items-center justify-center ${animatedGlass ? 'bg-black/60 modal-overlay-glass' : 'bg-[#0a0a0a]/90'}`}>
-                    <div className="bg-[#1c1c1e] border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4">
+                    <div className={`p-6 max-w-md w-full mx-4 ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'}`}>
                         <h3 className="text-lg font-bold text-white mb-3">{t('settings.languageChanged.title')}</h3>
                         <p className="text-white/70 text-sm mb-4">
                             {t('settings.languageChanged.message', { language: showTranslationConfirm.langName })}
@@ -1715,7 +1612,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Delete Confirmation Modal */}
             {showDeleteConfirm && (
                 <div className={`fixed inset-0 z-[250] flex items-center justify-center ${animatedGlass ? 'bg-black/60 modal-overlay-glass' : 'bg-[#0a0a0a]/90'}`}>
-                    <div className="bg-[#1c1c1e] border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4">
+                    <div className={`p-6 max-w-md w-full mx-4 ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'}`}>
                         <div className="flex items-center gap-3 mb-4">
                             <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
                                 <Trash2 size={20} className="text-red-400" />
@@ -1746,7 +1643,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Delete Instance Confirmation Modal */}
             {instanceToDelete && (
                 <div className={`fixed inset-0 z-[250] flex items-center justify-center ${animatedGlass ? 'bg-black/60 modal-overlay-glass' : 'bg-[#0a0a0a]/90'}`}>
-                    <div className="bg-[#1c1c1e] border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4">
+                    <div className={`p-6 max-w-md w-full mx-4 ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'}`}>
                         <div className="flex items-center gap-3 mb-4">
                             <div className="w-10 h-10 rounded-full bg-red-500/20 flex items-center justify-center">
                                 <Trash2 size={20} className="text-red-400" />
@@ -1779,7 +1676,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Export Instance Modal */}
             {showInstanceExportModal && (
                 <div className={`fixed inset-0 z-[250] flex items-center justify-center ${animatedGlass ? 'bg-black/80 modal-overlay-glass' : 'bg-[#0a0a0a]/95'}`}>
-                    <div className="bg-[#1c1c1e] rounded-2xl border border-white/10 p-6 w-full max-w-md mx-4">
+                    <div className={`p-6 w-full max-w-md mx-4 ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'}`}>
                         <div className="flex items-center justify-between mb-6">
                             <h3 className="text-xl font-bold text-white">{t('settings.instanceSettings.exportInstance')}</h3>
                             <button
@@ -1852,7 +1749,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* Import Instance Modal */}
             {showImportModal && (
                 <div className={`fixed inset-0 z-[250] flex items-center justify-center ${animatedGlass ? 'bg-black/60 modal-overlay-glass' : 'bg-[#0a0a0a]/90'}`}>
-                    <div className="bg-[#1c1c1e] border border-white/10 rounded-2xl p-6 max-w-md w-full mx-4">
+                    <div className={`p-6 max-w-md w-full mx-4 ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'}`}>
                         <div className="flex items-center gap-3 mb-4">
                             <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: `${accentColor}20` }}>
                                 <Download size={20} style={{ color: accentColor }} />
@@ -1944,7 +1841,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             {/* All Backgrounds Modal - Now includes solid colors */}
             {showAllBackgrounds && (
                 <div className={`fixed inset-0 z-[250] flex items-center justify-center ${animatedGlass ? 'bg-black/60 modal-overlay-glass' : 'bg-[#0a0a0a]/90'}`}>
-                    <div className="bg-[#1c1c1e] border border-white/10 rounded-2xl max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col overflow-hidden">
+                    <div className={`max-w-2xl w-full mx-4 max-h-[80vh] flex flex-col overflow-hidden ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'}`}>
                         <div className="flex items-center justify-between p-4 border-b border-white/5">
                             <h3 className="text-lg font-bold text-white">{t('settings.visualSettings.chooseBackground')}</h3>
                             <button
@@ -2005,28 +1902,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                 ))}
                             </div>
 
-                            {/* Solid colors */}
-                            <div className="p-3 rounded-xl bg-[#0f0f0f] border border-white/5">
-                            <p className="text-xs text-white/40 mb-2">{t('settings.visualSettings.solidColors')}</p>
-                            <div className="grid grid-cols-6 gap-2">
-                                {SOLID_COLORS.map((color) => (
-                                    <div
-                                        key={color}
-                                        className="aspect-video rounded-lg cursor-pointer border-2 transition-all flex items-center justify-center"
-                                        style={{
-                                            backgroundColor: color,
-                                            borderColor: backgroundMode === `color:${color}` ? accentColor : 'transparent',
-                                            boxShadow: backgroundMode === `color:${color}` ? `0 0 0 2px ${accentColor}30` : 'none'
-                                        }}
-                                        onClick={() => handleBackgroundModeChange(`color:${color}`)}
-                                    >
-                                        {backgroundMode === `color:${color}` && (
-                                            <Check size={16} className="text-white drop-shadow-lg" />
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                            </div>
                         </div>
                     </div>
                 </div>

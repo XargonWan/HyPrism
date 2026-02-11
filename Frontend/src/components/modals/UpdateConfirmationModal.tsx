@@ -46,7 +46,7 @@ export const UpdateConfirmationModal = ({
                 onClick={onCancel}
             />
 
-            <div className="relative bg-[#1a1a1a] rounded-2xl border border-white/10 p-6 max-w-md w-full mx-4 shadow-2xl">
+            <div className={`relative ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'} p-6 max-w-md w-full mx-4 shadow-2xl`}>
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">

@@ -96,6 +96,7 @@ public class GameSessionService : IGameSessionService
             _progressService.ReportDownloadProgress("preparing", 0, "launch.detail.preparing_session", null, 0, 0);
 
             string branch = UtilityService.NormalizeVersionType(_config.VersionType);
+            _progressService.ReportDownloadProgress("preparing", 1, "launch.detail.checking_versions", null, 0, 0);
             var versions = await _versionService.GetVersionListAsync(branch, cts.Token);
             cts.Token.ThrowIfCancellationRequested();
 
@@ -272,13 +273,14 @@ public class GameSessionService : IGameSessionService
         int targetVersion, Func<bool>? launchAfterDownloadProvider, CancellationToken ct)
     {
         Logger.Info("Download", "Game not installed, starting download...");
-        _progressService.ReportDownloadProgress("download", 0, "launch.detail.preparing_download", null, 0, 0);
+        _progressService.ReportDownloadProgress("download", 1, "launch.detail.preparing_download", null, 0, 0);
 
         try
         {
+            _progressService.ReportDownloadProgress("download", 2, "launch.detail.installing_butler", null, 0, 0);
             await _butlerService.EnsureButlerInstalledAsync((progress, message) =>
             {
-                int mappedProgress = (int)(progress * 0.05);
+                int mappedProgress = 2 + (int)(progress * 0.03);
                 _progressService.ReportDownloadProgress("download", mappedProgress, message, null, 0, 0);
             });
         }
@@ -323,7 +325,46 @@ public class GameSessionService : IGameSessionService
 
             Directory.CreateDirectory(Path.GetDirectoryName(pwrPath)!);
 
-            await DownloadPwrWithCachingAsync(downloadUrl, pwrPath, osName, arch, apiVersionType, targetVersion, officialDown, ct);
+            try
+            {
+                await DownloadPwrWithCachingAsync(downloadUrl, pwrPath, osName, arch, apiVersionType, targetVersion, officialDown, ct);
+            }
+            catch (MirrorDiffRequiredException)
+            {
+                // Pre-release official download failed, mirror requires diff-based approach
+                Logger.Info("Download", $"Switching to mirror diff chain for pre-release v{targetVersion}");
+                _progressService.ReportDownloadProgress("download", 5, "launch.detail.downloading_mirror", null, 0, 0);
+                
+                try
+                {
+                    await _patchManager.ApplyDifferentialUpdateAsync(versionPath, branch, 0, targetVersion, ct);
+                    
+                    if (isLatestInstance)
+                        _instanceService.SaveLatestInfo(branch, targetVersion);
+
+                    _progressService.ReportDownloadProgress("complete", 95, "launch.detail.download_complete", null, 0, 0);
+
+                    await EnsureRuntimeDependenciesAsync(ct);
+                    ct.ThrowIfCancellationRequested();
+
+                    var launchAfterDiff = launchAfterDownloadProvider?.Invoke() ?? true;
+                    if (!launchAfterDiff)
+                    {
+                        _progressService.ReportDownloadProgress("complete", 100, "launch.detail.done", null, 0, 0);
+                        return new DownloadProgress { Success = true, Progress = 100 };
+                    }
+
+                    _progressService.ReportDownloadProgress("complete", 100, "launch.detail.launching_game", null, 0, 0);
+                    await _gameLauncher.LaunchGameAsync(versionPath, branch, ct);
+                    return new DownloadProgress { Success = true, Progress = 100 };
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    Logger.Error("Download", $"Mirror diff chain install failed: {ex.Message}");
+                    return new DownloadProgress { Error = $"Failed to install game from mirror: {ex.Message}" };
+                }
+            }
 
             // Extract PWR with Butler
             _progressService.ReportDownloadProgress("install", 65, "launch.detail.installing_butler_pwr", null, 0, 0);
@@ -480,6 +521,12 @@ public class GameSessionService : IGameSessionService
                         Logger.Error("Download", $"Mirror download also failed: {mirrorEx.Message}");
                     }
                 }
+                else if (_mirrorService.IsDiffBasedBranch(branch))
+                {
+                    // Pre-release uses diff patches on the mirror; signal caller to use diff chain
+                    Logger.Info("Download", "Pre-release branch detected - falling back to diff-based mirror download");
+                    throw new MirrorDiffRequiredException(version);
+                }
             }
 
             if (!downloaded)
@@ -528,5 +575,17 @@ public class GameSessionService : IGameSessionService
                 _progressService.ReportDownloadProgress("install", mappedProgress, message, null, 0, 0);
             });
         }
+    }
+}
+
+/// <summary>
+/// Thrown when a pre-release download fails from official and the mirror requires diff-based download.
+/// </summary>
+internal class MirrorDiffRequiredException : Exception
+{
+    public int TargetVersion { get; }
+    public MirrorDiffRequiredException(int targetVersion) : base("Mirror requires diff-based download for pre-release")
+    {
+        TargetVersion = targetVersion;
     }
 }

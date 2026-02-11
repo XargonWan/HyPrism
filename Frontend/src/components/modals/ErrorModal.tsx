@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { AlertTriangle, X, Copy, RefreshCw, Bug } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ipc } from '@/lib/ipc';
+import { useAnimatedGlass } from '../../contexts/AnimatedGlassContext';
 import { ModalOverlay } from './ModalOverlay';
 
 interface ErrorModalProps {
@@ -18,6 +19,7 @@ interface ErrorModalProps {
 
 export const ErrorModal: React.FC<ErrorModalProps> = ({ error, onClose }) => {
   const { t } = useTranslation();
+  const { animatedGlass } = useAnimatedGlass();
   const [copied, setCopied] = React.useState(false);
 
   const copyError = () => {
@@ -74,7 +76,7 @@ export const ErrorModal: React.FC<ErrorModalProps> = ({ error, onClose }) => {
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className="w-full max-w-lg bg-[#0d0d0d] rounded-2xl border border-red-500/20 overflow-hidden"
+        className={`w-full max-w-lg overflow-hidden ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'} !border-red-500/20`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

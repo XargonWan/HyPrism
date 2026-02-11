@@ -4,7 +4,7 @@ import { X, RefreshCw, Check, User, Edit3, Copy, CheckCircle, Plus, Trash2, Dice
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAccentColor } from '../contexts/AccentColorContext';
 import { useAnimatedGlass } from '../contexts/AnimatedGlassContext';
-import { ipc, Profile, ProfileSnapshot } from '@/lib/ipc';
+import { ipc, Profile } from '@/lib/ipc';
 import { DeleteProfileConfirmationModal } from './modals/DeleteProfileConfirmationModal';
 import { ProfileCreationWizard } from './ProfileCreationWizard';
 
@@ -128,7 +128,6 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                 GetProfiles(),
                 GetActiveProfileIndex()
             ]);
-            console.log('[ProfileEditor] Loaded profiles:', JSON.stringify(profileList, null, 2), 'Active index:', activeIndex);
             setProfiles(profileList || []);
             setCurrentProfileIndex(activeIndex);
             
@@ -362,7 +361,6 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
             const targetAvatar = profileAvatars[targetProfile.uuid ?? ''];
             setLocalAvatar(targetAvatar || null);
             
-            console.log('[ProfileEditor] Switching to profile at index:', actualIndex, 'with ID:', profileId);
             const success = await SwitchProfile(actualIndex);
             
             if (success) {
@@ -401,11 +399,8 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
     const handleConfirmDelete = async () => {
         if (!deleteConfirmation) return;
         
-        console.log('[ProfileEditor] Deleting profile:', deleteConfirmation.id);
-        
         try {
             const success = await DeleteProfile(deleteConfirmation.id);
-            console.log('[ProfileEditor] Delete result:', success);
             if (success) {
                 // Reload profiles after delete
                 await loadProfiles();
@@ -425,7 +420,6 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
 
     const handleWizardComplete = async (profile: Profile) => {
         setShowWizard(false);
-        console.log('[ProfileEditor] Wizard created profile:', profile);
         
         // Reload profiles list
         await loadProfiles();
@@ -434,7 +428,6 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
         const updatedProfiles = await GetProfiles();
         const newProfileIndex = updatedProfiles?.findIndex(p => p.id === profile.id);
         if (newProfileIndex !== undefined && newProfileIndex >= 0) {
-            console.log('[ProfileEditor] Switching to new profile at index:', newProfileIndex);
             await SwitchProfile(newProfileIndex);
             setUsernameState(profile.name);
             setEditUsername(profile.name);
@@ -455,10 +448,8 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
     const handleDuplicateProfile = async (profileId: string, e: React.MouseEvent) => {
         e.stopPropagation();
         try {
-            console.log('[ProfileEditor] Duplicating profile (without data):', profileId);
             const newProfile = await DuplicateProfileWithoutData(profileId);
             if (newProfile) {
-                console.log('[ProfileEditor] Duplicated profile:', newProfile);
                 await loadProfiles();
                 onProfileUpdate?.();
             }
@@ -476,19 +467,18 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className={isPageMode
-                    ? "w-full h-full"
+                    ? "w-full h-full flex gap-4"
                     : `fixed inset-0 z-[200] flex items-center justify-center ${animatedGlass ? 'bg-black/60 modal-overlay-glass' : 'bg-[#0a0a0a]/90'}`
                 }
                 onClick={(e) => !isPageMode && e.target === e.currentTarget && onClose()}
             >
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    className={`bg-[#1c1c1e] border border-white/[0.06] rounded-2xl shadow-2xl overflow-hidden flex ${isPageMode ? 'w-full h-full' : 'w-full max-w-3xl mx-4 max-h-[80vh]'}`}
-                >
-                    {/* Left Sidebar - Profiles List */}
-                    <div className="w-48 bg-[#2c2c2e] border-r border-white/[0.04] flex flex-col py-4 overflow-y-auto">
+                {/* In modal mode, constrain width/height; in page mode, 'contents' makes this invisible to layout */}
+                <div className={isPageMode
+                    ? "contents"
+                    : "w-full max-w-3xl mx-4 max-h-[80vh] flex gap-2 relative"
+                }>
+                    {/* Left Sidebar - Independent glass panel */}
+                    <div className={`w-48 flex-shrink-0 flex flex-col py-4 overflow-y-auto rounded-2xl ${animatedGlass ? 'glass-panel' : 'glass-panel-static-solid'}`}>
                         {!isPageMode && <h2 className="text-lg font-bold text-white px-4 mb-4">{t('profiles.savedProfiles')}</h2>}
                         
                         {/* Profile Navigation - All Profiles */}
@@ -496,14 +486,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                             {/* All Profiles - show all of them with current one highlighted */}
                             {(() => {
                                 const filtered = profiles.filter(p => p.name && p.name.trim() !== '');
-                                console.log('[ProfileEditor] Rendering profiles:', JSON.stringify({
-                                    total: profiles.length,
-                                    filtered: filtered.length,
-                                    currentProfileIndex,
-                                    allProfiles: profiles,
-                                    filteredProfiles: filtered
-                                }, null, 2));
-                                return filtered.map((profile, displayIndex) => {
+                                return filtered.map((profile) => {
                                 // Find the actual index in the original profiles array
                                 const actualIndex = profiles.findIndex(p => p.id === profile.id);
                                 const isCurrentProfile = actualIndex === currentProfileIndex;
@@ -591,20 +574,20 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                         </div>
                     </div>
 
-                    {/* Right Content - Profile Details or Wizard */}
-                    <div className="flex-1 flex flex-col min-w-0">
-                        {/* Header - only in modal mode */}
-                        {!isPageMode && (
-                            <div className="flex items-center justify-between p-4 border-b border-white/[0.04]">
-                                <h3 className="text-white font-medium">{showWizard ? t('profiles.wizard.title') : t('profiles.editor')}</h3>
+                    {/* Right Content - Independent glass panel */}
+                    <div className={`flex-1 flex flex-col min-w-0 overflow-hidden rounded-2xl ${animatedGlass ? 'glass-panel' : 'glass-panel-static-solid'}`}>
+                        {/* Header */}
+                        <div className="flex items-center justify-between p-4 border-b border-white/[0.04]">
+                            <h3 className="text-white font-medium">{showWizard ? t('profiles.wizard.title') : t('profiles.editor')}</h3>
+                            {!isPageMode && (
                                 <button
                                     onClick={onClose}
                                     className="p-2 rounded-lg text-white/40 hover:text-white/80 hover:bg-white/10 transition-colors"
                                 >
                                     <X size={20} />
                                 </button>
-                            </div>
-                        )}
+                            )}
+                        </div>
 
                         {/* Content: Wizard or Profile Details */}
                         {showWizard ? (
@@ -724,7 +707,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                                     </div>
 
                                     {/* UUID Section */}
-                                    <div className="p-4 rounded-xl bg-[#2c2c2e] border border-white/[0.06]">
+                                    <div className="p-4 rounded-2xl bg-[#2c2c2e] border border-white/[0.06]">
                                         <div className="flex items-center justify-between mb-2">
                                             <label className="text-sm text-white/60">{t('profiles.playerUuid')}</label>
                                             <div className="flex items-center gap-1">
@@ -816,7 +799,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                                         whileHover={{ scale: 1.02 }}
                                         whileTap={{ scale: 0.98 }}
                                         onClick={() => OpenCurrentProfileFolder()}
-                                        className="w-full p-3 rounded-xl bg-[#2c2c2e] border border-white/[0.06] hover:border-white/20 flex items-center justify-center gap-2 text-white/60 hover:text-white transition-colors"
+                                        className="w-full p-4 rounded-2xl bg-[#2c2c2e] border border-white/[0.06] hover:border-white/20 flex items-center justify-center gap-2 text-white/60 hover:text-white transition-colors"
                                     >
                                         <FolderOpen size={18} />
                                         <span className="text-sm">{t('profiles.openFolder')}</span>
@@ -839,7 +822,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                         </div>
                         )}
                     </div>
-                </motion.div>
+                </div>
             </motion.div>
             
             {/* Delete Profile Confirmation Modal */}

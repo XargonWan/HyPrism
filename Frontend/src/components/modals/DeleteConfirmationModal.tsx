@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Trash2, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ModalOverlay } from './ModalOverlay';
+import { useAnimatedGlass } from '../../contexts/AnimatedGlassContext';
 
 interface DeleteConfirmationModalProps {
   onConfirm: () => void;
@@ -14,13 +15,14 @@ export const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = (
   onCancel
 }) => {
   const { t } = useTranslation();
+  const { animatedGlass } = useAnimatedGlass();
   return (
     <ModalOverlay zClass="z-50" onClick={onCancel}>
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.9, opacity: 0 }}
-        className="w-full max-w-md bg-[#0d0d0d] rounded-2xl border border-red-500/20 overflow-hidden"
+        className={`w-full max-w-md overflow-hidden ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'} !border-red-500/20`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Icon */}

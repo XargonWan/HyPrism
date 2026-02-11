@@ -1289,7 +1289,6 @@ const App: React.FC = () => {
                 setModBrowserInstance({ branch, version });
                 setShowModBrowser(true);
               }}
-              onNavigateToDashboard={() => setCurrentPage('dashboard')}
               isGameRunning={isGameRunning}
               runningBranch={runningBranch}
               runningVersion={runningVersion}

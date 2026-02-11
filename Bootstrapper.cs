@@ -32,9 +32,14 @@ public static class Bootstrapper
             var appDir = UtilityService.GetEffectiveAppDir();
             services.AddSingleton(new AppPathConfiguration(appDir));
 
-            services.AddSingleton(_ => new HttpClient
+            services.AddSingleton(_ => 
             {
-                Timeout = TimeSpan.FromMinutes(30)
+                var client = new HttpClient
+                {
+                    Timeout = TimeSpan.FromMinutes(30)
+                };
+                client.DefaultRequestHeaders.Add("User-Agent", "HyPrism/1.0");
+                return client;
             });
 
             // Config

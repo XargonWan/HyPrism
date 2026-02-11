@@ -10,9 +10,10 @@ import {
 } from 'lucide-react';
 import { useAccentColor } from '../contexts/AccentColorContext';
 import { useAnimatedGlass } from '../contexts/AnimatedGlassContext';
-import { ipc, InstalledInstance, invoke, send, InstanceValidationStatus, InstanceValidationDetails, SaveInfo } from '@/lib/ipc';
+import { ipc, InstalledInstance, invoke, send, SaveInfo } from '@/lib/ipc';
 import { formatBytes } from '../utils/format';
 import { GameBranch } from '@/constants/enums';
+import { CreateInstanceModal } from '../components/modals/CreateInstanceModal';
 
 // IPC calls for instance operations - uses invoke to send to backend
 const ExportInstance = async (branch: string, version: number): Promise<string> => {
@@ -106,16 +107,6 @@ const GetInstanceIcon = async (branch: string, version: number): Promise<string 
   }
 };
 
-// _SetInstanceIcon is preserved for future icon picker functionality
-const _SetInstanceIcon = async (branch: string, version: number, iconPath: string): Promise<boolean> => {
-  try {
-    return await invoke<boolean>('hyprism:instance:setIcon', { branch, version, iconPath });
-  } catch (e) {
-    console.warn('[IPC] SetInstanceIcon:', e);
-    return false;
-  }
-};
-
 // Types
 interface ModInfo {
   id: string;
@@ -135,8 +126,6 @@ interface ModInfo {
   latestFileId?: number;
 }
 
-// SaveInfo is imported from @/lib/ipc
-
 // Convert InstalledInstance to InstalledVersionInfo
 const toVersionInfo = (inst: InstalledInstance): InstalledVersionInfo => ({
   branch: inst.branch,
@@ -146,9 +135,6 @@ const toVersionInfo = (inst: InstalledInstance): InstalledVersionInfo => ({
   isLatest: false,
   isLatestInstance: inst.version === 0,
   iconPath: undefined,
-  customName: inst.customName,
-  validationStatus: inst.validationStatus || 'Unknown',
-  validationDetails: inst.validationDetails,
 });
 
 export interface InstalledVersionInfo {
@@ -165,10 +151,8 @@ export interface InstalledVersionInfo {
   updatedAt?: string;
   iconPath?: string;
   customName?: string;
-  /** Validation status of the instance */
-  validationStatus?: InstanceValidationStatus;
-  /** Detailed validation information */
-  validationDetails?: InstanceValidationDetails;
+  validationStatus?: string;
+  validationDetails?: { errorMessage?: string };
 }
 
 const pageVariants = {
@@ -183,7 +167,6 @@ type InstanceTab = 'content' | 'worlds' | 'logs';
 interface InstancesPageProps {
   onInstanceDeleted?: () => void;
   onOpenModBrowser?: (branch: string, version: number) => void;
-  onNavigateToDashboard?: () => void;
   isGameRunning?: boolean;
   runningBranch?: string;
   runningVersion?: number;
@@ -193,7 +176,6 @@ interface InstancesPageProps {
 export const InstancesPage: React.FC<InstancesPageProps> = ({ 
   onInstanceDeleted, 
   onOpenModBrowser, 
-  onNavigateToDashboard,
   isGameRunning = false,
   runningBranch,
   runningVersion,
@@ -239,11 +221,13 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
   const [showInstanceMenu, setShowInstanceMenu] = useState(false);
   const instanceMenuRef = useRef<HTMLDivElement>(null);
 
+  // Create Instance Modal
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
   const loadInstances = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await ipc.game.instances();
-      console.log('[InstancesPage] Loaded instances:', data);
       const instanceList = (data || []).map(toVersionInfo);
       setInstances(instanceList);
       
@@ -275,11 +259,16 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
       const normalized = normalizeInstalledMods(mods || []);
       setInstalledMods(normalized);
       
-      // Check for updates
-      const updates = await CheckInstanceModUpdates(selectedInstance.branch, selectedInstance.version);
-      const normalizedUpdates = normalizeInstalledMods(updates || []);
-      setModsWithUpdates(normalizedUpdates);
-      setUpdateCount(normalizedUpdates.length);
+      // Check for updates (use short timeout since it may be stubbed)
+      try {
+        const updates = await CheckInstanceModUpdates(selectedInstance.branch, selectedInstance.version);
+        const normalizedUpdates = normalizeInstalledMods(updates || []);
+        setModsWithUpdates(normalizedUpdates);
+        setUpdateCount(normalizedUpdates.length);
+      } catch {
+        setModsWithUpdates([]);
+        setUpdateCount(0);
+      }
     } catch (err) {
       console.error('Failed to load installed mods:', err);
       setInstalledMods([]);
@@ -608,7 +597,7 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
           </div>
           <div className="flex items-center gap-1">
             <button
-              onClick={onNavigateToDashboard}
+              onClick={() => setShowCreateModal(true)}
               className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-all"
               title={t('instances.addInstance')}
             >
@@ -634,7 +623,7 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
         </div>
 
         {/* Instance List & Storage Info - Unified glass panel */}
-        <div className="flex-1 flex flex-col overflow-hidden rounded-2xl glass-panel-static min-h-0">
+        <div className={`flex-1 flex flex-col overflow-hidden rounded-2xl ${animatedGlass ? 'glass-panel' : 'glass-panel-static-solid'} min-h-0`}>
           <div className="flex-1 overflow-y-auto">
           <div className="p-2 space-y-1">
           {isLoading ? (
@@ -646,7 +635,7 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
               <Box size={32} className="mb-2 opacity-50" />
               <p className="text-xs text-center mb-3">{t('instances.noInstances')}</p>
               <button
-                onClick={onNavigateToDashboard}
+                onClick={() => setShowCreateModal(true)}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white/80 hover:text-white text-xs transition-all"
               >
                 <Plus size={14} />
@@ -727,12 +716,23 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
         {selectedInstance ? (
           <>
             {/* Unified instance detail panel */}
-            <div className="flex-1 flex flex-col overflow-hidden rounded-2xl glass-panel-static">
+            <div className={`flex-1 flex flex-col overflow-hidden rounded-2xl ${animatedGlass ? 'glass-panel' : 'glass-panel-static-solid'}`}>
             {/* Tabs & Actions */}
             <div className="flex items-center justify-between gap-4 px-3 py-3 flex-shrink-0 border-b border-white/[0.06]">
-              {/* Left side: Tabs */}
-              <div className="flex items-center gap-1 px-2 py-1 bg-black/20 rounded-xl border border-white/[0.06]">
-                {(['content', 'worlds', 'logs'] as InstanceTab[]).map((tab) => (
+              {/* Left side: Tabs + Branch/Version Info */}
+              <div className="flex items-center gap-3">
+                {/* Branch/Version Badge */}
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-black/30 rounded-xl border border-white/[0.06]">
+                  <span className="text-xs font-medium" style={{ color: accentColor }}>
+                    {selectedInstance.branch === GameBranch.RELEASE ? t('main.release') : t('main.preRelease')}
+                  </span>
+                  <span className="text-white/30 text-xs">•</span>
+                  <span className="text-white/70 text-xs font-medium">v{selectedInstance.version}</span>
+                </div>
+                
+                {/* Tabs */}
+                <div className="flex items-center gap-1 px-2 py-1 bg-black/20 rounded-xl border border-white/[0.06]">
+                  {(['content', 'worlds', 'logs'] as InstanceTab[]).map((tab) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
@@ -746,6 +746,7 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                     {t(`instances.tab.${tab}`)}
                   </button>
                 ))}
+                </div>
               </div>
 
               {/* Right side: Action Buttons */}
@@ -1173,7 +1174,7 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                     initial={{ scale: 0.95, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     exit={{ scale: 0.95, opacity: 0 }}
-                    className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 max-w-sm mx-4 shadow-2xl"
+                    className={`p-6 max-w-sm mx-4 shadow-2xl ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'}`}
                   >
                     <h3 className="text-white font-bold text-lg mb-4">{t('instances.rename')}</h3>
                     <input
@@ -1211,6 +1212,21 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
               )}
             </AnimatePresence>
           </>
+        ) : instances.length === 0 ? (
+          /* No Instances Available - Prompt to Create */
+          <div className={`flex-1 flex flex-col items-center justify-center rounded-2xl ${animatedGlass ? 'glass-panel' : 'glass-panel-static-solid'}`}>
+            <Box size={64} className="mb-4 text-white/20" />
+            <p className="text-xl font-medium text-white/70">{t('instances.noInstances')}</p>
+            <p className="text-sm mt-2 text-white/40 text-center max-w-xs">{t('instances.createInstanceHint')}</p>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="mt-6 px-6 py-3 rounded-xl text-sm font-bold flex items-center gap-2 transition-all hover:opacity-90 shadow-lg"
+              style={{ backgroundColor: accentColor, color: accentTextColor }}
+            >
+              <Plus size={18} />
+              {t('instances.createInstance')}
+            </button>
+          </div>
         ) : (
           /* No Instance Selected */
           <div className="flex-1 flex flex-col items-center justify-center text-white/30">
@@ -1254,7 +1270,7 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 max-w-sm mx-4 shadow-2xl"
+              className={`p-6 max-w-sm mx-4 shadow-2xl ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'}`}
             >
               <h3 className="text-white font-bold text-lg mb-2">{t('instances.deleteTitle')}</h3>
               <p className="text-white/60 text-sm mb-4">
@@ -1289,7 +1305,7 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-6 max-w-sm mx-4 shadow-2xl"
+              className={`p-6 max-w-sm mx-4 shadow-2xl ${animatedGlass ? 'glass-panel-static' : 'glass-panel-static-solid'}`}
             >
               <h3 className="text-white font-bold text-lg mb-2">{t('modManager.deleteModTitle')}</h3>
               <p className="text-white/60 text-sm mb-4">
@@ -1312,6 +1328,16 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Create Instance Modal */}
+      <CreateInstanceModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreateStart={() => {
+          // Refresh instances after creation starts
+          loadInstances();
+        }}
+      />
     </motion.div>
   );
 };

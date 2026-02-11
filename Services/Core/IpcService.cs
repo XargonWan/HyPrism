@@ -121,6 +121,7 @@ public class IpcService
         RegisterModHandlers();
         RegisterSystemHandlers();
         RegisterConsoleHandlers();
+        RegisterFileDialogHandlers();
 
         Logger.Success("IPC", "All IPC handlers registered");
     }
@@ -211,7 +212,9 @@ public class IpcService
                     {
                         if (data.TryGetValue("branch", out var branchEl))
                         {
-                            configService.Configuration.LauncherBranch = branchEl.GetString() ?? "release";
+                            var branchValue = branchEl.GetString() ?? "release";
+                            configService.Configuration.VersionType = branchValue;
+                            configService.Configuration.LauncherBranch = branchValue;
                         }
                         if (data.TryGetValue("version", out var versionEl))
                         {
@@ -968,6 +971,9 @@ public class IpcService
     // #region Mods
     // @ipc invoke hyprism:mods:list -> ModItem[]
     // @ipc invoke hyprism:mods:search -> ModSearchResult
+    // @ipc invoke hyprism:mods:installed -> ModItem[]
+    // @ipc invoke hyprism:mods:uninstall -> boolean
+    // @ipc invoke hyprism:mods:checkUpdates -> ModItem[]
 
     private void RegisterModHandlers()
     {
@@ -1000,6 +1006,93 @@ public class IpcService
             catch (Exception ex)
             {
                 Logger.Error("IPC", $"Mods search failed: {ex.Message}");
+            }
+        });
+
+        // Get installed mods for a specific instance (by branch and version)
+        Electron.IpcMain.On("hyprism:mods:installed", (args) =>
+        {
+            try
+            {
+                var json = ArgsToJson(args);
+                using var doc = JsonDocument.Parse(json);
+                var branch = doc.RootElement.GetProperty("branch").GetString() ?? "release";
+                var version = doc.RootElement.GetProperty("version").GetInt32();
+                var instancePath = instanceService.GetInstancePath(branch, version);
+                
+                var mods = modService.GetInstanceInstalledMods(instancePath);
+                Reply("hyprism:mods:installed:reply", mods);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("IPC", $"Mods installed failed: {ex.Message}");
+                Reply("hyprism:mods:installed:reply", new List<object>());
+            }
+        });
+
+        // Uninstall a mod from an instance
+        Electron.IpcMain.On("hyprism:mods:uninstall", async (args) =>
+        {
+            try
+            {
+                var json = ArgsToJson(args);
+                using var doc = JsonDocument.Parse(json);
+                var modId = doc.RootElement.GetProperty("modId").GetString() ?? "";
+                var branch = doc.RootElement.GetProperty("branch").GetString() ?? "release";
+                var version = doc.RootElement.GetProperty("version").GetInt32();
+                var instancePath = instanceService.GetInstancePath(branch, version);
+                
+                // Get current mods, remove the one with matching ID, save back
+                var mods = modService.GetInstanceInstalledMods(instancePath);
+                var modToRemove = mods.FirstOrDefault(m => m.Id == modId || m.Name == modId);
+                if (modToRemove != null)
+                {
+                    mods.Remove(modToRemove);
+                    
+                    // Delete the actual mod file if it exists
+                    if (!string.IsNullOrEmpty(modToRemove.FileName))
+                    {
+                        var modFilePath = Path.Combine(instancePath, "Client", "mods", modToRemove.FileName);
+                        if (File.Exists(modFilePath))
+                        {
+                            try { File.Delete(modFilePath); }
+                            catch (Exception ex) { Logger.Warning("IPC", $"Failed to delete mod file: {ex.Message}"); }
+                        }
+                    }
+                    
+                    await modService.SaveInstanceModsAsync(instancePath, mods);
+                    Reply("hyprism:mods:uninstall:reply", true);
+                }
+                else
+                {
+                    Reply("hyprism:mods:uninstall:reply", false);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("IPC", $"Mods uninstall failed: {ex.Message}");
+                Reply("hyprism:mods:uninstall:reply", false);
+            }
+        });
+
+        // Check for mod updates (returns mods that have updates available)
+        Electron.IpcMain.On("hyprism:mods:checkUpdates", async (args) =>
+        {
+            try
+            {
+                var json = ArgsToJson(args);
+                using var doc = JsonDocument.Parse(json);
+                var branch = doc.RootElement.GetProperty("branch").GetString() ?? "release";
+                var version = doc.RootElement.GetProperty("version").GetInt32();
+                var instancePath = instanceService.GetInstancePath(branch, version);
+                
+                var updates = await modService.CheckInstanceModUpdatesAsync(instancePath);
+                Reply("hyprism:mods:checkUpdates:reply", updates);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("IPC", $"Mods check updates failed: {ex.Message}");
+                Reply("hyprism:mods:checkUpdates:reply", new List<object>());
             }
         });
     }
@@ -1043,6 +1136,83 @@ public class IpcService
 
         Electron.IpcMain.On("hyprism:console:error", (args) =>
             Logger.Error("Renderer", ArgsToString(args)));
+    }
+
+    // #endregion
+
+    // #region File Dialog
+    // @ipc invoke hyprism:file:browseFolder -> string | null
+    // @ipc invoke hyprism:settings:launcherPath -> string
+    // @ipc invoke hyprism:settings:defaultInstanceDir -> string
+
+    private void RegisterFileDialogHandlers()
+    {
+        var fileDialog = _services.GetRequiredService<IFileDialogService>();
+        var appPath = _services.GetRequiredService<AppPathConfiguration>();
+        var config = _services.GetRequiredService<IConfigService>();
+
+        // Browse folder dialog
+        Electron.IpcMain.On("hyprism:file:browseFolder", async (args) =>
+        {
+            try
+            {
+                var initialPath = ArgsToString(args);
+                var selected = await fileDialog.BrowseFolderAsync(string.IsNullOrEmpty(initialPath) ? null : initialPath);
+                Reply("hyprism:file:browseFolder:reply", selected ?? "");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("IPC", $"Failed to browse folder: {ex.Message}");
+                Reply("hyprism:file:browseFolder:reply", "");
+            }
+        });
+
+        // Get launcher folder path (app data path)
+        Electron.IpcMain.On("hyprism:settings:launcherPath", (_) =>
+        {
+            Reply("hyprism:settings:launcherPath:reply", appPath.AppDir);
+        });
+
+        // Get default instance directory
+        Electron.IpcMain.On("hyprism:settings:defaultInstanceDir", (_) =>
+        {
+            var defaultDir = Path.Combine(appPath.AppDir, "game");
+            Reply("hyprism:settings:defaultInstanceDir:reply", defaultDir);
+        });
+        
+        // Set instance directory
+        Electron.IpcMain.On("hyprism:settings:setInstanceDir", async (args) =>
+        {
+            try
+            {
+                var path = ArgsToString(args);
+                var result = await config.SetInstanceDirectoryAsync(path);
+                Reply("hyprism:settings:setInstanceDir:reply", new { success = result != null, path = result ?? "" });
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("IPC", $"Failed to set instance directory: {ex.Message}");
+                Reply("hyprism:settings:setInstanceDir:reply", new { success = false, path = "" });
+            }
+        });
+        
+        // Set launcher data directory (in config)
+        Electron.IpcMain.On("hyprism:settings:setLauncherDataDir", (args) =>
+        {
+            try
+            {
+                var path = ArgsToString(args);
+                var cfg = config.Configuration;
+                cfg.LauncherDataDirectory = path;
+                config.SaveConfig();
+                Reply("hyprism:settings:setLauncherDataDir:reply", new { success = true });
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("IPC", $"Failed to set launcher data directory: {ex.Message}");
+                Reply("hyprism:settings:setLauncherDataDir:reply", new { success = false, error = ex.Message });
+            }
+        });
     }
 
     // #endregion
