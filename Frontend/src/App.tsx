@@ -1263,6 +1263,8 @@ const App: React.FC = () => {
               onDuplicate={handleGameDuplicate}
               onExit={handleExit}
               onCancelDownload={handleCancelDownload}
+              getNews={getCombinedNews}
+              newsDisabled={newsDisabled}
             />
           )}
 
