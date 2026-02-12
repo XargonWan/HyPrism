@@ -1,8 +1,6 @@
-<img src="Frontend/src/assets/images/appicon.png" alt="HyPrism Logo" width="128" height="128" />
+<img src="Frontend/src/assets/images/preview_logo.png" alt="HyPrism Logo" height="128" />
 
-# HyPrism
-
-  **A multiplatform Hytale launcher with mod manager and more!**
+  *A multiplatform Hytale launcher with mod manager and more!*
 
   [![Downloads](https://img.shields.io/github/downloads/yyyumeniku/HyPrism/total?style=for-the-badge&logo=github&label=Downloads&color=207e5c)](https://github.com/yyyumeniku/HyPrism/releases)
   [![Website](https://img.shields.io/badge/Website-hyprism-207e5c?style=for-the-badge&logo=google-chrome&logoColor=white)](https://yyyumeniku.github.io/hyprism-site/)
