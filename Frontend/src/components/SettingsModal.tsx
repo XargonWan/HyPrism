@@ -1294,45 +1294,55 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
                             {/* About Tab */}
                             {activeTab === 'about' && (
-                                <div className="space-y-6">
-                                    {/* App Icon and Info - No button styling */}
-                                    <div className="flex flex-col items-center py-4">
-                                        <img 
-                                            src={appIcon} 
-                                            alt="HyPrism" 
-                                            className="w-20 h-20 mb-3"
-                                        />
-                                        <h3 className="text-xl font-bold text-white">HyPrism</h3>
-                                        <p className="text-sm text-white/50">{t('settings.aboutSettings.unofficial')}</p>
-                                    </div>
+                                <div className="space-y-6 w-full max-w-6xl mx-auto">
+                                    <div className="grid grid-cols-1 xl:grid-cols-[260px_minmax(0,1fr)] gap-6 items-start">
+                                        <div className={`p-5 rounded-2xl ${gc} space-y-5`}>
+                                            <div className="flex flex-col items-center text-center">
+                                                <img
+                                                    src={appIcon}
+                                                    alt="HyPrism"
+                                                    className="w-20 h-20 mb-3"
+                                                />
+                                                <h3 className="text-xl font-bold text-white">HyPrism</h3>
+                                                <p className="text-sm text-white/50">{t('settings.aboutSettings.unofficial')}</p>
+                                            </div>
 
-                                    {/* Action Buttons - White icons like main menu */}
-                                    <div className="flex justify-center gap-4">
-                                        <button
-                                            onClick={openGitHub}
-                                            className="opacity-80 hover:opacity-100 transition-opacity"
-                                            title="GitHub"
-                                        >
-                                            <Github size={28} className="text-white" />
-                                        </button>
-                                        <button
-                                            onClick={openDiscord}
-                                            className="opacity-80 hover:opacity-100 transition-opacity"
-                                            title="Discord"
-                                        >
-                                            <DiscordIcon size={20} color="white" />
-                                        </button>
-                                        <button
-                                            onClick={openBugReport}
-                                            className="opacity-80 hover:opacity-100 transition-opacity"
-                                            title={t('settings.aboutSettings.bugReport')}
-                                        >
-                                            <Bug size={28} className="text-white" />
-                                        </button>
-                                    </div>
+                                            <div className="flex justify-center gap-4">
+                                                <button
+                                                    onClick={openGitHub}
+                                                    className="opacity-80 hover:opacity-100 transition-opacity"
+                                                    title="GitHub"
+                                                >
+                                                    <Github size={28} className="text-white" />
+                                                </button>
+                                                <button
+                                                    onClick={openDiscord}
+                                                    className="opacity-80 hover:opacity-100 transition-opacity"
+                                                    title="Discord"
+                                                >
+                                                    <DiscordIcon size={20} color="white" />
+                                                </button>
+                                                <button
+                                                    onClick={openBugReport}
+                                                    className="opacity-80 hover:opacity-100 transition-opacity"
+                                                    title={t('settings.aboutSettings.bugReport')}
+                                                >
+                                                    <Bug size={28} className="text-white" />
+                                                </button>
+                                            </div>
 
-                                    {/* Contributors Section - No separator */}
-                                    <div className="pt-2">
+                                            <button
+                                                onClick={async () => {
+                                                    await ResetOnboarding();
+                                                    window.location.reload();
+                                                }}
+                                                className="w-full p-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white transition-all text-sm"
+                                            >
+                                                {t('settings.aboutSettings.replayIntro')}
+                                            </button>
+                                        </div>
+
+                                        <div className="pt-1">
                                         {isLoadingContributors ? (
                                             <div className="flex justify-center py-4">
                                                 <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: `${accentColor}30`, borderTopColor: accentColor }} />
@@ -1340,11 +1350,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                         ) : (
                                             <div className="space-y-4">
                                                 {/* Maintainer & Auth Server Creator */}
-                                                <div className="flex justify-center gap-4 flex-wrap">
+                                                <div className="flex flex-wrap gap-3 xl:gap-4">
                                                     {maintainer && (
                                                         <button
                                                             onClick={() => BrowserOpenURL(maintainer.html_url)}
-                                                            className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors"
+                                                            className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors min-w-[240px] max-w-[360px]"
                                                         >
                                                             <img 
                                                                 src={maintainer.avatar_url} 
@@ -1359,7 +1369,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                                     )}
                                                     <button
                                                         onClick={() => BrowserOpenURL('https://github.com/sanasol')}
-                                                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors"
+                                                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors min-w-[240px] max-w-[360px]"
                                                     >
                                                         <img 
                                                             src="https://avatars.githubusercontent.com/u/1709666?v=4" 
@@ -1373,31 +1383,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                                     </button>
                                                     <button
                                                         onClick={() => BrowserOpenURL('https://github.com/freakdaniel')}
-                                                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors"
+                                                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors min-w-[240px] max-w-[360px]"
                                                     >
                                                         <img 
                                                             src="https://avatars.githubusercontent.com/u/212660794?v=4" 
-                                                            alt="FREAK DANIEL"
+                                                            alt="freakdaniel"
                                                             className="w-12 h-12 rounded-full"
                                                         />
                                                         <div className="text-left">
-                                                            <span className="text-white font-medium text-sm">FREAK DANIEL</span>
-                                                            <p className="text-xs text-white/40">CoDev, creator of the premium system, refactored the whole UI, code and a LOT MORE</p>
+                                                            <span className="text-white font-medium text-sm">Daniel Freak</span>
+                                                            <p className="text-xs text-white/40">CoDev, Creator of ton features</p>
                                                         </div>
                                                     </button>
                                                 </div>
 
                                                 {/* Description */}
-                                                <p className="text-xs text-white/40 text-center">{t('settings.aboutSettings.contributorsDescription')}</p>
+                                                <p className="text-xs text-white/40 text-center xl:text-left">{t('settings.aboutSettings.contributorsDescription')}</p>
 
-                                                {/* Other Contributors - 5 per row, larger avatars */}
+                                                {/* Other Contributors */}
                                                 {otherContributors.length > 0 && (
-                                                    <div className="grid grid-cols-5 gap-3 justify-items-center">
+                                                    <div className="flex flex-wrap gap-3 sm:gap-4 justify-center xl:justify-start">
                                                         {otherContributors.map((contributor) => (
                                                             <button
                                                                 key={contributor.login}
                                                                 onClick={() => BrowserOpenURL(contributor.html_url)}
-                                                                className="flex flex-col items-center gap-1.5 p-2 rounded-lg hover:bg-white/5 transition-colors w-full"
+                                                                className="flex flex-col items-center gap-1.5 p-2 rounded-lg hover:bg-white/5 transition-colors w-[88px]"
                                                                 title={`${contributor.login} - ${contributor.contributions} contributions`}
                                                             >
                                                                 <img 
@@ -1415,6 +1425,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                             </div>
                                         )}
                                     </div>
+                                    </div>
 
                                     {/* Disclaimer */}
                                     <div className={`p-4 rounded-2xl ${gc}`}>
@@ -1422,17 +1433,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                             {t('settings.aboutSettings.disclaimer')}
                                         </p>
                                     </div>
-
-                                    {/* Replay Introduction Button */}
-                                    <button
-                                        onClick={async () => {
-                                            await ResetOnboarding();
-                                            window.location.reload();
-                                        }}
-                                        className="w-full p-3 rounded-xl bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white transition-all text-sm"
-                                    >
-                                        {t('settings.aboutSettings.replayIntro')}
-                                    </button>
                                 </div>
                             )}
 

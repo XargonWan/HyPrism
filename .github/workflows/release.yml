@@ -109,12 +109,6 @@ jobs:
                   "deb": "https://github.com/$REPO/releases/download/$TAG/HyPrism-linux-x64-$VERSION.deb",
                   "rpm": "https://github.com/$REPO/releases/download/$TAG/HyPrism-linux-x64-$VERSION.rpm",
                   "tar": "https://github.com/$REPO/releases/download/$TAG/HyPrism-linux-x64-$VERSION.tar.xz"
-                },
-                "arm64": {
-                  "appimage": "https://github.com/$REPO/releases/download/$TAG/HyPrism-linux-arm64-$VERSION.AppImage",
-                  "deb": "https://github.com/$REPO/releases/download/$TAG/HyPrism-linux-arm64-$VERSION.deb",
-                  "rpm": "https://github.com/$REPO/releases/download/$TAG/HyPrism-linux-arm64-$VERSION.rpm",
-                  "tar": "https://github.com/$REPO/releases/download/$TAG/HyPrism-linux-arm64-$VERSION.tar.xz"
                 }
               },
               "windows": {
@@ -141,9 +135,6 @@ jobs:
           # Check what files we actually have
           if ! ls final-assets/*linux*x64* >/dev/null 2>&1; then
             WARNINGS="${WARNINGS}- Linux x64 build\n"
-          fi
-          if ! ls final-assets/*linux*arm64* >/dev/null 2>&1; then
-            WARNINGS="${WARNINGS}- Linux ARM64 build\n"
           fi
           if ! ls final-assets/*win* >/dev/null 2>&1; then
             WARNINGS="${WARNINGS}- Windows x64 build\n"
@@ -172,7 +163,7 @@ jobs:
             
             ${{ steps.build_status.outputs.warnings }}
             
-            ### 📥 Downloads
+            ### Downloads
             
             | Platform | Architecture | Format | Download |
             |----------|-------------|--------|----------|
@@ -182,20 +173,16 @@ jobs:
             | **Linux** | x64 | DEB | `HyPrism-linux-x64-${{ steps.version.outputs.version }}.deb` |
             | **Linux** | x64 | RPM | `HyPrism-linux-x64-${{ steps.version.outputs.version }}.rpm` |
             | **Linux** | x64 | tar.xz | `HyPrism-linux-x64-${{ steps.version.outputs.version }}.tar.xz` |
-            | **Linux** | ARM64 | AppImage | `HyPrism-linux-arm64-${{ steps.version.outputs.version }}.AppImage` |
-            | **Linux** | ARM64 | DEB | `HyPrism-linux-arm64-${{ steps.version.outputs.version }}.deb` |
-            | **Linux** | ARM64 | RPM | `HyPrism-linux-arm64-${{ steps.version.outputs.version }}.rpm` |
-            | **Linux** | ARM64 | tar.xz | `HyPrism-linux-arm64-${{ steps.version.outputs.version }}.tar.xz` |
             
-            ### 🖥️ System Requirements
+            ### System Requirements
             
             | OS | Supported Architectures |
             |----|------------------------|
             | Windows 10/11 | x64 |
-            | Linux | x64, ARM64 |
+            | Linux | x64 |
             | macOS | ARM64 (Apple Silicon) |
             
-            > ⚠️ **Note**: Windows ARM64 and macOS Intel (x86_64) are **not supported**.
+            > **Note**: Windows ARM64 and macOS Intel (x86_64) are **not supported**.
             
             ### 📝 Changes
             
