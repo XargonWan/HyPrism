@@ -6,20 +6,20 @@
 
 ### Общее
 - [Введение](General/Introduction.md) — Обзор проекта и цели
-- [Возможности](General/Features.md) — Список функций
+- [Функции](General/Features.md) — Список возможностей
 
 ### Техническое
-- [Архитектура](Technical/Architecture.md) — Архитектура Console + IPC + React SPA
-- [Структура проекта](Technical/ProjectStructure.md) — Расположение файлов и папок
-- [Генерация IPC-кода](Technical/IpcCodegen.md) — Автоматически генерируемый типизированный IPC-мост
-- [Справочник сервисов](Technical/ServicesReference.md) — Слой .NET-сервисов
+- [Архитектура](Technical/Architecture.md) — Консольное приложение + IPC + React SPA архитектура
+- [Структура проекта](Technical/ProjectStructure.md) — Организация файлов и папок
+- [Генерация IPC кода](Technical/IpcCodegen.md) — Автоматическая генерация типизированного IPC-моста
+- [Справочник сервисов](Technical/ServicesReference.md) — Слой сервисов .NET
 - [Локализация](Technical/Localization.md) — Поддержка нескольких языков
 - [Сборка](Technical/Building.md) — Инструкции по сборке, запуску и публикации
 
 ### Разработка
-- [Стандарты кода](Development/CodingStandards.md) — Соглашения для C# и TypeScript
-- [Руководство по фронтенду](Development/FrontendGuide.md) — React-компоненты, темизация, маршрутизация
-- [Вклад в проект](Development/Contributing.md) — Руководство по участию
+- [Стандарты кода](Development/CodingStandards.md) — Соглашения C# и TypeScript
+- [Руководство по фронтенду](Development/FrontendGuide.md) — React компоненты, темы, маршрутизация
+- [Вклад в проект](Development/Contributing.md) — Руководство для контрибьюторов
 
 ### Пользователю
 - [Установка](User/Installation.md) — Установка HyPrism

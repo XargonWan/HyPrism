@@ -7,14 +7,15 @@
 | Layer | Technology |
 |-------|-----------|
 | Backend | .NET 10, C# 13 |
-| Desktop Shell | Electron.NET (ElectronNET.Core 0.4.0, Electron 34) |
+| Desktop Shell | Electron.NET (Electron 34) |
 | Frontend | React 19 + TypeScript 5.9 + Vite 7 |
-| Animations | GSAP 3 + @gsap/react |
+| Animations | Framer Motion |
 | Styling | TailwindCSS v4 |
 | Icons | Lucide React |
 | Routing | React Router DOM |
 | DI | Microsoft.Extensions.DependencyInjection |
 | Logging | Serilog |
+| Localization | i18next (12 languages) |
 
 ## How It Works
 
@@ -37,9 +38,29 @@ This is **NOT** a web server — there is no ASP.NET, no HTTP, no REST. The fron
 2. **Context isolation** — `contextIsolation: true`, `nodeIntegration: false`; all Electron APIs exposed via `preload.js`
 3. **DI everywhere** — All .NET services registered in `Bootstrapper.cs` via constructor injection
 4. **Cross-platform** — Windows, Linux, macOS support via .NET 10 + Electron
+5. **Instance-based** — Each game installation is isolated in its own GUID-based folder
 
 ## Supported Platforms
 
 - **Windows** 10/11 (x64)
 - **Linux** (x64) — AppImage, Flatpak
 - **macOS** (x64, arm64)
+
+## Supported Languages
+
+HyPrism supports 12 languages with runtime switching:
+
+| Code | Language |
+|------|----------|
+| en-US | English |
+| ru-RU | Russian |
+| de-DE | German |
+| es-ES | Spanish |
+| fr-FR | French |
+| ja-JP | Japanese |
+| ko-KR | Korean |
+| pt-BR | Portuguese (Brazil) |
+| tr-TR | Turkish |
+| uk-UA | Ukrainian |
+| zh-CN | Chinese (Simplified) |
+| be-BY | Belarusian |

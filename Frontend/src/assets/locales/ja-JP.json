@@ -8,6 +8,7 @@
     "browse": "参照",
     "select": "選択",
     "save": "保存",
+    "edit": "編集",
     "export": "エクスポート",
     "import": "インポート",
     "reset": "リセット",
@@ -58,6 +59,7 @@
     "mods": "MOD",
     "profiles": "プロファイル",
     "instances": "インスタンス",
+    "logs": "ログ",
     "settings": "設定"
   },
   "main": {
@@ -69,6 +71,7 @@
     "update": "更新",
     "duplicate": "複製",
     "download": "ダウンロード",
+    "selectInstance": "インスタンスを選択",
     "release": "リリース",
     "preRelease": "プレリリース",
     "latest": "最新",
@@ -84,12 +87,12 @@
     "educationalOnly": "教育目的限定。",
     "likeIt": "気に入りましたか？",
     "buyIt": "購入する",
+    "officialServerBlocked": "公式サーバーにはゲームの購入とHytaleアカウントが必要です",
     "buyMeA": "購入する",
     "modManager": "MOD管理",
     "openInstanceFolder": "インスタンスフォルダーを開く",
     "settings": "設定",
-    "stop": "停止",
-    "officialServerBlocked": "公式サーバーにはゲームの購入とHytaleアカウントが必要です"
+    "stop": "停止"
   },
   "settings": {
     "title": "設定",
@@ -283,6 +286,29 @@
       "currentServer": "現在のサーバー"
     }
   },
+  "logs": {
+    "title": "ログ",
+    "refresh": "更新",
+    "copy": "すべてコピー",
+    "copySelected": "選択をコピー",
+    "export": "エクスポート",
+    "clear": "クリア",
+    "searchPlaceholder": "ログを検索...",
+    "loading": "ログを読み込み中...",
+    "empty": "まだログがありません",
+    "noResults": "フィルターに一致するログがありません",
+    "showing": "{{total}}件中{{count}}件を表示",
+    "selected": "{{count}}件選択中",
+    "auto": "自動",
+    "filter": {
+      "all": "すべて",
+      "info": "情報",
+      "success": "成功",
+      "warning": "警告",
+      "error": "エラー",
+      "debug": "デバッグ"
+    }
+  },
   "news": {
     "title": "ニュース",
     "all": "すべて",
@@ -302,6 +328,17 @@
     "import": "インポート",
     "storage": "ストレージ",
     "noInstances": "インスタンスがインストールされていません",
+    "addInstance": "インスタンスを追加",
+    "createInstance": "インスタンスを作成",
+    "createInstanceHint": "新しいゲームインスタンスをダウンロードしてセットアップします",
+    "editInstance": "インスタンスを編集",
+    "editInstanceHint": "このインスタンスの名前またはアイコンを変更します",
+    "instanceName": "インスタンス名",
+    "instanceNamePlaceholder": "このインスタンスの名前を入力",
+    "selectIcon": "アイコンを選択",
+    "uploadIcon": "アイコンをアップロード",
+    "creating": "作成中...",
+    "create": "作成",
     "downloadFromDashboard": "ダッシュボードからゲームバージョンをダウンロード",
     "exportedSuccess": "インスタンスを正常にエクスポートしました",
     "exportFailed": "インスタンスのエクスポートに失敗しました",
@@ -311,7 +348,6 @@
     "importFailed": "インスタンスのインポートに失敗しました",
     "deleteTitle": "インスタンスを削除",
     "deleteConfirm": "本当に削除しますか",
-    "addInstance": "インスタンスを追加",
     "selectInstance": "インスタンスを選択",
     "selectInstanceHint": "左からインスタンスを選択してコンテンツを表示・管理",
     "lastPlayed": "最終プレイ日",
@@ -334,14 +370,8 @@
     "noSaves": "セーブデータが見つかりません",
     "noSavesHint": "ゲームをプレイして最初のセーブを作成",
     "logsComingSoon": "ログビューアーは近日公開予定",
-    "createInstance": "インスタンスを作成",
-    "createInstanceHint": "新しいゲームインスタンスをダウンロードしてセットアップします",
-    "instanceName": "インスタンス名",
-    "instanceNamePlaceholder": "このインスタンスの名前を入力",
-    "selectIcon": "アイコンを選択",
-    "uploadIcon": "アイコンをアップロード",
-    "creating": "作成中...",
-    "create": "作成"
+    "instanceNotInstalled": "インスタンスがインストールされていません",
+    "instanceNotInstalledHint": "このインスタンスをダウンロードしてコンテンツを管理"
   },
   "profiles": {
     "title": "プロファイル",
@@ -449,47 +479,48 @@
       "checking_versions": "利用可能なバージョンを確認中...",
       "installing_butler": "ダウンロードエンジンをセットアップ中...",
       "downloading_mirror": "ミラーからダウンロード中... {0}%",
-      "downloading_official": "Hytaleからダウンロード中... {0}%"
+      "downloading_official": "Hytaleからダウンロード中... {0}%",
+      "dualauth_setup": "認証エージェントをセットアップ中..."
     }
   },
   "profileEditor": {
     "title": "プロフィール編集",
     "avatar": "アバター",
-    "dropSkin": "スキンをドロップ",
-    "openAvatarFolder": "フォルダを開く",
-    "refreshPreview": "更新",
+    "dropSkin": "スキンファイルをここにドロップするか、下のボタンを使用してください",
+    "openAvatarFolder": "アバターフォルダを開く",
+    "refreshPreview": "プレビューを更新",
     "username": "ユーザー名",
-    "usernameHint": "1-16文字",
+    "usernameHint": "1〜16文字",
     "uuid": "UUID",
-    "uuidHint": "固有ID",
+    "uuidHint": "プロファイルの一意の識別子",
     "randomize": "ランダム",
     "copy": "コピー",
     "save": "保存",
     "cancel": "キャンセル"
   },
   "deleteProfile": {
-    "title": "削除しますか？",
+    "title": "プロファイルを削除しますか？",
     "profile": "プロファイル：",
     "message": "本当に削除しますか：",
-    "warning": "以下が完全に削除されます：",
+    "warning": "以下のすべてのプロファイルデータが完全に削除されます：",
     "profileSettings": "プロファイルの設定と環境設定",
     "installedMods": "インストール済みMod",
     "savedGameData": "保存されたゲームデータ",
     "skinAndAvatar": "スキンとアバター",
-    "avatarData": "スキンとアバター",
+    "avatarData": "アバターとスキンデータ",
     "gameData": "ゲーム進行データ",
-    "settings": "設定",
-    "cannotUndo": "元に戻せません。",
+    "settings": "プロファイル設定",
+    "cannotUndo": "この操作は元に戻せません。",
     "cancel": "キャンセル",
-    "delete": "削除"
+    "delete": "プロファイルを削除"
   },
   "deleteGame": {
     "title": "ゲームを削除しますか？",
-    "warning": "以下が完全に削除されます：",
+    "warning": "以下のすべてのゲームファイルが完全に削除されます：",
     "gameInstallation": "ゲームのインストール",
     "downloadedPatches": "ダウンロード済みパッチ",
     "cacheFiles": "キャッシュファイル",
-    "preserveNote": "プロファイルと設定は保持されます。"
+    "preserveNote": "ユーザーデータとスキンプリセットは保持されます。"
   },
   "updateConfirmation": {
     "title": "ゲームの更新があります",
@@ -503,34 +534,25 @@
     "updateNow": "今すぐ更新"
   },
   "error": {
-    "title": "エラー",
-    "occurredAt": "発生場所",
-    "technicalDetails": "詳細",
-    "copyError": "コピー",
+    "title": "エラーが発生しました",
+    "occurredAt": "発生場所：",
+    "technicalDetails": "技術的な詳細",
+    "copyError": "エラーをコピー",
     "reportIssue": "問題を報告",
     "ok": "OK",
     "dismiss": "閉じる"
-  },
-  "logs": {
-    "title": "ゲームログ",
-    "description": "ゲームの出力とエラーを表示",
-    "failedToLoad": "ログの読み込みに失敗しました：",
-    "loading": "ログを読み込み中...",
-    "noLogs": "ログなし",
-    "autoRefresh": "3秒ごとに自動更新",
-    "download": "ダウンロード"
   },
   "update": {
     "downloading": "ダウンロード中...",
     "extracting": "展開中...",
     "launching": "起動中...",
-    "pleaseWait": "お待ちください。",
-    "autoLaunch": "自動的に起動します。"
+    "pleaseWait": "ゲームファイルのダウンロードとインストールが完了するまでお待ちください。",
+    "autoLaunch": "準備ができ次第、ゲームは自動的に起動されます。"
   },
   "updateOverlay": {
-    "title": "更新中...",
-    "message": "アップデートをインストール中です。お待ちください...",
-    "autoRestart": "ランチャーは自動的に再起動します。"
+    "title": "ランチャーを更新中",
+    "message": "HyPrismの最新バージョンをダウンロードしてインストールしています。お待ちください。",
+    "autoRestart": "更新が完了すると、ランチャーは自動的に再起動します。"
   },
   "modManager": {
     "title": "Modマネージャー",
@@ -676,6 +698,7 @@
   "onboarding": {
     "language": "言語",
     "profile": "プロファイル",
+    "hardware": "ハードウェア",
     "visual": "ビジュアル",
     "location": "場所",
     "about": "情報",
@@ -683,15 +706,25 @@
     "getStarted": "始める",
     "skip": "スキップ",
     "welcome": "HyPrismへようこそ",
+    "welcomeBack": "お帰りなさい、{{name}}さん！",
     "letsSetUp": "ランチャーを設定しましょう",
     "chooseLanguage": "言語を選択",
     "selectLanguageHint": "ランチャーインターフェースの言語を選択してください",
     "setupProfile": "プロファイル設定",
-    "chooseUsername": "ユーザー名を選択",
+    "chooseUsername": "ゲーム用のユーザー名を選択",
     "username": "ユーザー名",
     "enterUsername": "ユーザー名を入力",
     "generateUsername": "ランダムユーザー名を生成",
-    "usernameHint": "1～16文字",
+    "usernameHint": "1〜16文字",
+    "hardwareSettings": "ハードウェア設定",
+    "gpuPreference": "GPU設定",
+    "gpuHint": "ゲーム起動時に使用するグラフィックカードを選択",
+    "gpu_auto": "自動",
+    "gpu_autoHint": "システムに任せる",
+    "gpu_dedicated": "専用GPU",
+    "gpu_dedicatedHint": "専用グラフィックカードを使用",
+    "gpu_integrated": "統合GPU",
+    "gpu_integratedHint": "統合グラフィックスを使用",
     "customizeAppearance": "外観をカスタマイズ",
     "chooseAccentAndBg": "アクセントカラーと背景を選択",
     "accentColor": "アクセントカラー",
@@ -710,7 +743,18 @@
     "maintainerRole": "メンテナ & 開発者",
     "authServerCreator": "認証サーバー作成者",
     "disclaimer": "HyPrismは非公式ランチャーです。Hypixel Studiosとは提携していません。",
-    "enterLauncher": "ランチャーを開始"
+    "enterLauncher": "ランチャーを開始",
+    "auth": {
+      "title": "認証",
+      "description": "Hytaleアカウントでログインしてください。まだゲームを購入していない場合は、スキップをクリックしてください。",
+      "login": "Hytaleでログイン",
+      "skip": "スキップ",
+      "authenticating": "認証中...",
+      "failed": "認証に失敗しました。もう一度お試しください。",
+      "error": "認証中にエラーが発生しました。",
+      "noHytaleProfile": "お使いのアカウントはまだHytaleにアクセスできません。公式ウェブサイトでゲームを購入できます。",
+      "createFailed": "Hytaleアカウントからプロファイルの作成に失敗しました。"
+    }
   },
   "languageSelector": {
     "changeLanguage": "言語を変更",

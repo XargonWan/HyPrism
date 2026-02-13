@@ -477,6 +477,15 @@ public class SkinService : ISkinService
             if (File.Exists(skinPath))
             {
                 var destPath = Path.Combine(profileDir, "skin.json");
+                // Remove read-only attribute from destination if it exists
+                if (File.Exists(destPath))
+                {
+                    var destInfo = new FileInfo(destPath);
+                    if (destInfo.IsReadOnly)
+                    {
+                        destInfo.IsReadOnly = false;
+                    }
+                }
                 var skinJson = File.ReadAllText(skinPath);
                 File.Copy(skinPath, destPath, true);
                 Logger.Info("Profile", $"Backed up skin for {profile.Name} ({skinJson.Length} bytes)");

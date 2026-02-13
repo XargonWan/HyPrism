@@ -3,11 +3,11 @@
 ## Requirements
 
 - **Windows 10/11** (x64), **Linux** (x64), or **macOS** (x64/arm64)
-- Internet connection for first launch (game download)
+- Internet connection for first launch (authentication & game download)
 
 ## Download
 
-Download the latest release from the [GitHub Releases](https://github.com/HyPrism/HyPrism/releases) page.
+Download the latest release from the [GitHub Releases](https://github.com/yyyumeniku/HyPrism/releases) page.
 
 ### Windows
 
@@ -36,17 +36,37 @@ flatpak run dev.hyprism.HyPrism
 
 ## Data Directory
 
-HyPrism stores its data (config, game files, logs) in:
+HyPrism stores its data (config, instances, profiles, logs) in:
 
 | OS | Path |
 |----|------|
 | Windows | `%APPDATA%/HyPrism/` |
-| Linux | `~/.config/HyPrism/` |
+| Linux | `~/.local/share/HyPrism/` |
 | macOS | `~/Library/Application Support/HyPrism/` |
 
-## First Launch
+### Directory Structure
 
-On first launch, HyPrism will:
-1. Create the data directory
-2. Show the main dashboard
-3. Download game files when you click "Play"
+```
+HyPrism/
+├── config.json         # Launcher configuration
+├── Instances/          # Game installations (GUID-based folders)
+│   └── {GUID}/         # Individual instance
+├── Profiles/           # Player profiles and skin backups
+├── Logs/               # Application logs
+└── Cache/              # Temporary files
+```
+
+## First Launch (Onboarding)
+
+On first launch, HyPrism guides you through setup with an onboarding wizard:
+
+1. **Splash Screen** — Welcome to HyPrism
+2. **Language Selection** — Choose your preferred language (12 available)
+3. **Hytale Authentication** — Log in with your Hytale account
+4. **Profile Setup** — Create your first player profile (nickname, avatar)
+5. **Initial Settings** — Configure GPU preference and other options
+
+After onboarding:
+- The launcher creates the data directory structure
+- Your profile and settings are saved
+- You can download and install the game from the Dashboard

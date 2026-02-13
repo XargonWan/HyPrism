@@ -118,9 +118,6 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
     // Delete confirmation modal state
     const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string; name: string } | null>(null);
 
-    // Avatar file input ref
-    const avatarInputRef = React.useRef<HTMLInputElement>(null);
-
     // Whether the current profile is an official Hytale account (locked editing)
     const isCurrentOfficial = profiles[currentProfileIndex]?.isOfficial === true;
 
@@ -292,31 +289,6 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
         } catch (err) {
             console.error('Failed to copy UUID:', err);
         }
-    };
-
-    const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        try {
-            const reader = new FileReader();
-            reader.onloadend = async () => {
-                const base64 = reader.result as string;
-                const result = await ipc.profile.setAvatar(base64);
-                if (result?.success) {
-                    setLocalAvatar(base64);
-                    // Also refresh profile avatars
-                    const avatar = await GetAvatarPreview();
-                    if (avatar) setLocalAvatar(avatar);
-                    await loadProfiles();
-                    onProfileUpdate?.();
-                }
-            };
-            reader.readAsDataURL(file);
-        } catch (err) {
-            console.error('Failed to upload avatar:', err);
-        }
-        // Reset file input so the same file can be selected again
-        if (avatarInputRef.current) avatarInputRef.current.value = '';
     };
 
     const handleSaveUsernameWithName = async (name: string) => {
@@ -633,24 +605,11 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                                 <div className="space-y-6">
                                     {/* Profile Picture Section */}
                                     <div className="flex flex-col items-center gap-4">
-                                        {/* Hidden file input for avatar upload */}
-                                        <input
-                                            ref={avatarInputRef}
-                                            type="file"
-                                            accept="image/png,image/jpeg,image/webp,image/gif"
-                                            className="hidden"
-                                            onChange={handleAvatarUpload}
-                                        />
-                                        {/* Avatar - Clickable to change */}
-                                        <div className="relative group">
-                                            <motion.button
-                                                whileHover={{ scale: 1.05 }}
-                                                whileTap={{ scale: 0.95 }}
-                                                onClick={() => !isCurrentOfficial && avatarInputRef.current?.click()}
-                                                className="w-24 h-24 rounded-full overflow-hidden border-2 flex items-center justify-center cursor-pointer"
+                                        {/* Avatar - Display only */}
+                                        <div className="relative">
+                                            <div
+                                                className="w-24 h-24 rounded-full overflow-hidden border-2 flex items-center justify-center"
                                                 style={{ borderColor: accentColor, backgroundColor: localAvatar ? 'transparent' : `${accentColor}20` }}
-                                                title={isCurrentOfficial ? t('profiles.officialLocked') : t('profiles.changeAvatar')}
-                                                disabled={isCurrentOfficial}
                                             >
                                                 {localAvatar ? (
                                                     <img
@@ -661,15 +620,7 @@ export const ProfileEditor: React.FC<ProfileEditorProps> = ({ isOpen, onClose, o
                                                 ) : (
                                                     <User size={40} style={{ color: accentColor }} />
                                                 )}
-                                            </motion.button>
-                                            {/* Edit overlay */}
-                                            {!isCurrentOfficial && (
-                                                <div 
-                                                    className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-                                                >
-                                                    <Image size={20} className="text-white" />
-                                                </div>
-                                            )}
+                                            </div>
                                         </div>
                                         
                                         {/* Username Display/Edit */}

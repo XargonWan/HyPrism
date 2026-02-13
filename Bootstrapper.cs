@@ -67,7 +67,7 @@ public static class Bootstrapper
             services.AddSingleton<NewsService>();
             services.AddSingleton<INewsService>(sp => sp.GetRequiredService<NewsService>());
 
-            services.AddSingleton<ProfileService>(sp =>
+            services.AddSingleton(sp =>
                 new ProfileService(
                     sp.GetRequiredService<AppPathConfiguration>().AppDir,
                     sp.GetRequiredService<ConfigService>(),
@@ -77,11 +77,11 @@ public static class Bootstrapper
             services.AddSingleton<DownloadService>();
             services.AddSingleton<IDownloadService>(sp => sp.GetRequiredService<DownloadService>());
 
-            services.AddSingleton<GitHubService>(sp =>
+            services.AddSingleton(sp =>
                 new GitHubService(sp.GetRequiredService<HttpClient>()));
             services.AddSingleton<IGitHubService>(sp => sp.GetRequiredService<GitHubService>());
 
-            services.AddSingleton<VersionService>(sp =>
+            services.AddSingleton(sp =>
                 new VersionService(
                     sp.GetRequiredService<AppPathConfiguration>().AppDir,
                     sp.GetRequiredService<IConfigService>(),

@@ -10,23 +10,25 @@ HyPrism/
 ├── Frontend/                   # React SPA (Vite + TypeScript)
 │   ├── src/
 │   │   ├── components/         # Reusable React components
-│   │   │   ├── TitleBar.tsx    # Frameless window title bar + controls
-│   │   │   ├── Sidebar.tsx     # Navigation sidebar
-│   │   │   └── GlassCard.tsx   # Glass-morphism card component
+│   │   │   ├── modals/         # Modal dialogs (Settings, OnboardingModal, etc.)
+│   │   │   ├── ProfileEditor.tsx  # Profile management UI
+│   │   │   └── ...
 │   │   ├── pages/              # Route-level page components
-│   │   │   ├── Dashboard.tsx   # Main dashboard (game launch)
-│   │   │   ├── News.tsx        # News feed page
-│   │   │   ├── Settings.tsx    # Settings page
-│   │   │   └── ModManager.tsx  # Mod browser/manager
+│   │   │   ├── DashboardPage.tsx  # Main dashboard (game launch)
+│   │   │   ├── NewsPage.tsx       # News feed page
+│   │   │   ├── InstancesPage.tsx  # Game instances manager
+│   │   │   └── ModsPage.tsx       # Mod browser/manager
 │   │   ├── contexts/           # React Context providers
-│   │   │   └── GameContext.tsx  # Game state management
+│   │   │   └── AccentColorContext.tsx  # Theme accent color
 │   │   ├── lib/                # Utilities
 │   │   │   └── ipc.ts          # AUTO-GENERATED IPC bridge (do not edit)
+│   │   ├── assets/             # Frontend static assets
+│   │   │   ├── locales/        # JSON localization files (12 languages)
+│   │   │   ├── images/         # Images and icons
+│   │   │   └── backgrounds/    # Dashboard backgrounds
 │   │   ├── App.tsx             # Root component with routing
 │   │   ├── main.tsx            # React entry point
-│   │   └── index.css           # Global styles + Tailwind + theme tokens
-│   ├── public/
-│   │   └── preload.js          # Electron preload script (contextBridge)
+│   │   └── index.css           # Global styles + Tailwind
 │   ├── index.html              # Vite entry HTML
 │   ├── vite.config.ts          # Vite config (Tailwind, base: './')
 │   ├── tsconfig*.json          # TypeScript configs
@@ -34,54 +36,51 @@ HyPrism/
 │
 ├── Services/                   # .NET Service Layer
 │   ├── Core/                   # Infrastructure services
-│   │   ├── IpcService.cs       # Central IPC channel registry + annotations
-│   │   ├── ConfigService.cs    # Application configuration
-│   │   ├── Logger.cs           # Structured logging (Serilog wrapper)
-│   │   ├── LocalizationService.cs  # Runtime language switching
-│   │   ├── BrowserService.cs   # External URL opening
-│   │   └── ...
+│   │   ├── App/                # Application services (Config, Settings, Update)
+│   │   ├── Infrastructure/     # Logger, ConfigService, LocalizationService
+│   │   ├── Integration/        # External integrations (Discord RPC)
+│   │   ├── Ipc/                # IpcService - Central IPC channel registry
+│   │   └── Platform/           # Platform-specific utilities
 │   ├── Game/                   # Game logic services
-│   │   ├── GameSessionService.cs   # Launch, download, patch
-│   │   ├── ClientPatcher.cs    # ⚠️ CRITICAL: Binary manipulation
-│   │   └── ...
+│   │   ├── Instance/           # Instance management (InstanceService)
+│   │   ├── Launch/             # Game launching (GameSessionService)
+│   │   ├── Download/           # Download management
+│   │   ├── Mod/                # Mod management
+│   │   ├── Auth/               # Hytale authentication
+│   │   ├── Butler/             # Butler patching tool
+│   │   └── Version/            # Version management
 │   └── User/                   # User-related services
-│       ├── ProfileService.cs   # Player profiles
-│       └── ...
+│       ├── ProfileService.cs   # Player profiles (nick, UUID)
+│       ├── SkinService.cs      # Skin management and backup
+│       └── HytaleAuthService.cs # Hytale account authentication
 │
 ├── Models/                     # Data models (POCOs)
-│   ├── Config.cs
-│   ├── Profile.cs
-│   ├── InstalledInstance.cs
+│   ├── Config.cs               # Configuration model
+│   ├── Profile.cs              # Player profile model
+│   ├── InstanceMeta.cs         # Instance metadata
 │   └── ...
 │
 ├── Scripts/                    # Build and utility scripts
-│   ├── generate-ipc.mjs       # IPC codegen: C# annotations → ipc.ts
-│   ├── build-linux.sh          # Linux build script
-│   └── ...
-│
-├── Assets/                     # .NET-side resources (CAPITALIZED)
-│   ├── Locales/                # JSON localization files
-│   │   ├── en-US.json
-│   │   ├── ru-RU.json
-│   │   └── ... (12 languages)
-│   └── Images/
-│       └── Backgrounds/
+│   ├── generate-ipc.mjs        # IPC codegen: C# annotations → ipc.ts
+│   └── publish.sh              # Build script
 │
 ├── Packaging/                  # OS-specific packaging
 │   ├── flatpak/                # Flatpak manifest + metadata
 │   ├── macos/                  # macOS Info.plist
-│   └── windows/
+│   └── windows/                # Windows specific files
 │
-├── Docs/                       # Documentation (this folder)
-│   ├── English/
-│   └── Russian/
+├── Docs/                       # Documentation
+│   ├── English/                # English documentation
+│   └── Russian/                # Russian documentation
 │
-└── UI/                         # ⚠️ DEPRECATED: Old Avalonia UI (do NOT use)
+└── wwwroot/                    # Compiled frontend (generated by build)
+    ├── index.html              # Production entry point
+    └── assets/                 # Compiled JS/CSS bundles
 ```
 
 ## Important Notes
 
 - **`Frontend/src/lib/ipc.ts`** is auto-generated by `Scripts/generate-ipc.mjs` — never edit manually
-- **`Assets/`** (capitalized) is for .NET-side resources; **`Frontend/src/assets/`** is for React-side static assets
-- **`UI/`** directory is the old Avalonia UI — completely deprecated, do not reference
-- **`ClientPatcher.cs`** handles binary operations — do NOT modify without explicit instruction
+- **`Frontend/src/assets/`** contains all frontend static resources (images, locales, backgrounds)
+- **`wwwroot/`** is generated during build — do not edit manually
+- **Instance folders** are stored as `{branch}/{guid}` (e.g., `release/abc123-...`)
