@@ -1,62 +1,113 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <!-- Electron.NET application metadata -->
+  <PropertyGroup Label="ElectronNetCommon">
+    <ElectronPackageId>dev.hyprism.HyPrism</ElectronPackageId>
+    <Title>HyPrism</Title>
+    <Version>3.0.0</Version>
+    <Description>Cross-platform Hytale launcher</Description>
+    <Company>HyPrism</Company>
+    <Copyright>Copyright © 2026 HyPrism Team</Copyright>
+    <License>MIT</License>
+    <ProjectUrl>https://github.com/HyPrism/HyPrism</ProjectUrl>
+    <ElectronVersion>34.2.0</ElectronVersion>
+    <ElectronSkipMigrationChecks>true</ElectronSkipMigrationChecks>
   </PropertyGroup>
 
   <!-- Windows-specific settings -->
   <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows')) OR '$(RuntimeIdentifier)' == 'win-x64' OR '$(RuntimeIdentifier)' == 'win-arm64'">
-    <OutputType>WinExe</OutputType>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>packaging/windows/HyPrism.ico</ApplicationIcon>
-    <!-- Enable single-file publishing for Windows only -->
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>true</SelfContained>
-    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
-    <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+    <ApplicationIcon>Packaging/windows/HyPrism.ico</ApplicationIcon>
   </PropertyGroup>
 
-  <!-- Exclude old code in IMPORTANT folder from compilation -->
+  <!-- Release optimizations -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <DebuggerSupport>false</DebuggerSupport>
+    <!-- DO NOT use PublishSingleFile -->
+    <PublishSingleFile>false</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <PublishTrimmed>false</PublishTrimmed>
+    <!-- ReadyToRun AOT compilation for faster startup -->
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <!-- Disable static asset compression (brotli/gzip) - prevents file duplication
+         and unnecessary decompression for local Electron apps -->
+    <CompressionEnabled>false</CompressionEnabled>
+  </PropertyGroup>
+
+  <!-- Memory and size optimizations -->
+  <PropertyGroup>
+    <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>
+    <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
+    <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
+    <GarbageCollectionAdaptationMode>0</GarbageCollectionAdaptationMode>
+    <EventSourceSupport>false</EventSourceSupport>
+  </PropertyGroup>
+
+  <!-- Electron.NET + Core packages -->
   <ItemGroup>
-    <Compile Remove="IMPORTANT/**/*.cs" />
-    <Content Remove="IMPORTANT/**/*" />
-    <None Remove="IMPORTANT/**/*" />
-    <EmbeddedResource Remove="IMPORTANT/**/*" />
+    <PackageReference Include="ElectronNET.Core" Version="0.4.0" />
+    <PackageReference Include="DiscordRichPresence" Version="1.143.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.3" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.5-beta1" />
+    <PackageReference Include="Serilog" Version="4.3.1" />
+    <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageReference Include="Serilog.Sinks.File" Version="8.0.0-dev-02318" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
 
+  <!-- Localization files as embedded resources -->
   <ItemGroup>
-    <PackageReference Include="DiscordRichPresence" Version="1.6.1.70" />
-    <PackageReference Include="System.Text.Json" Version="10.0.2" />
+    <EmbeddedResource Include="Locales/*.json" />
   </ItemGroup>
 
-  <!-- Modern build (webkit2gtk-4.1) - default -->
-  <ItemGroup Condition="'$(PhotinoVersion)' == '' OR '$(PhotinoVersion)' == 'modern'">
-    <PackageReference Include="Photino.NET" Version="4.0.16" />
-  </ItemGroup>
+  <!-- ================================================================ -->
+  <!--  FRONTEND AUTO-BUILD PIPELINE                                     -->
+  <!--  `npm ci` when lockfile changes, then `npm run build`             -->
+  <!--  Runs automatically on `dotnet build` / `dotnet run`              -->
+  <!-- ================================================================ -->
 
-  <!-- Legacy build (webkit2gtk-4.0) - for older Linux distributions -->
-  <ItemGroup Condition="'$(PhotinoVersion)' == 'legacy'">
-    <PackageReference Include="Photino.NET" Version="3.1.18" />
-  </ItemGroup>
+  <Target Name="NpmInstall" BeforeTargets="BuildFrontend" Inputs="Frontend/package.json;Frontend/package-lock.json" Outputs="Frontend/node_modules/.package-lock.json" Condition="Exists('Frontend/package.json')">
+    <Message Importance="high" Text="→ npm ci (Frontend)" />
+    <Exec Command="npm ci --prefer-offline" WorkingDirectory="Frontend" />
+  </Target>
 
-  <ItemGroup>
-    <Content Include="wwwroot/**/*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="jre.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="assets/discord-link.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>assets/discord-link.txt</Link>
-    </Content>
-    <Content Include="assets/game-lang/**/*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Link>game-lang/%(RecursiveDir)%(Filename)%(Extension)</Link>
-    </Content>
-  </ItemGroup>
+  <Target Name="GenerateIpcTs" BeforeTargets="BuildFrontend" DependsOnTargets="NpmInstall" Inputs="Services/Core/IpcService.cs" Outputs="Frontend/src/lib/ipc.ts" Condition="Exists('Scripts/generate-ipc.mjs')">
+    <Message Importance="high" Text="→ Generating ipc.ts from IpcService.cs" />
+    <Exec Command="node Scripts/generate-ipc.mjs" />
+  </Target>
+
+  <Target Name="BuildFrontend" BeforeTargets="Build" Inputs="Frontend/src/**/*;Frontend/index.html;Frontend/vite.config.ts;Frontend/tsconfig.json;Frontend/tsconfig.app.json" Outputs="wwwroot/index.html" Condition="Exists('Frontend/package.json')">
+    <Message Importance="high" Text="→ Building Frontend (Vite)" />
+    <Exec Command="npm run build" WorkingDirectory="Frontend" />
+  </Target>
+
+  <!-- Copy wwwroot → $(OutputPath)/wwwroot so dotnet run finds it -->
+  <Target Name="CopyFrontendDist" AfterTargets="Build" Condition="Exists('wwwroot/index.html')">
+    <ItemGroup>
+      <FrontendFiles Include="wwwroot/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FrontendFiles)" DestinationFiles="@(FrontendFiles->'$(OutputPath)/wwwroot/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyFrontendDistPublish" AfterTargets="Publish" Condition="Exists('wwwroot/index.html')">
+    <ItemGroup>
+      <FrontendFilesPublish Include="wwwroot/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FrontendFilesPublish)" DestinationFiles="@(FrontendFilesPublish->'$(PublishDir)/wwwroot/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
 
 </Project>

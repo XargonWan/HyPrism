@@ -1,0 +1,9 @@
+{
+  "configProperties": {
+    "System.GC.Server": false,
+    "System.GC.Concurrent": true,
+    "System.GC.RetainVM": false,
+    "System.GC.HeapHardLimit": 314572800,
+    "System.Runtime.TieredCompilation.QuickJitForLoops": true
+  }
+}

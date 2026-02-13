@@ -1,0 +1,102 @@
+# Building
+
+## Prerequisites
+
+- **.NET 10 SDK**
+- **Node.js 20+** (includes npm)
+- **Git**
+
+## Development
+
+### Full Build (Backend + Frontend)
+
+```bash
+dotnet build
+```
+
+This single command runs the entire MSBuild pipeline:
+
+1. `NpmInstall` — runs `npm ci` in `Frontend/`
+2. `GenerateIpcTs` — generates `Frontend/src/lib/ipc.ts` from C# annotations
+3. `BuildFrontend` — runs `npm run build` (TypeScript + Vite)
+4. `CopyFrontendDist` — copies `Frontend/dist/` → `bin/.../wwwroot/`
+5. Standard .NET compilation
+
+### Run
+
+```bash
+dotnet run
+```
+
+Starts the .NET Console app → spawns Electron → opens the window.
+
+### Frontend-Only Dev
+
+```bash
+cd Frontend
+npm run dev    # Vite dev server on localhost:5173
+```
+
+Useful for iterating on UI without restarting the full app. Note: IPC calls will not work in standalone mode (no Electron bridge).
+
+### Regenerate IPC
+
+```bash
+node Scripts/generate-ipc.mjs
+```
+
+Or triggered automatically by `dotnet build` when `IpcService.cs` changes.
+
+## Production Build
+
+```bash
+# Build frontend for production
+cd Frontend && npm run build
+
+# Publish .NET
+dotnet publish -c Release
+```
+
+The published output is in `bin/Release/net10.0/linux-x64/publish/` (or platform equivalent) and includes the `wwwroot/` folder with the compiled frontend.
+
+## Platform Notes
+
+### Linux
+
+```bash
+# Standard build
+dotnet build
+
+# Production publish
+dotnet publish -c Release -r linux-x64
+
+# Flatpak (see Packaging/flatpak/)
+flatpak-builder build Packaging/flatpak/dev.hyprism.HyPrism.json
+```
+
+### macOS
+
+```bash
+dotnet publish -c Release -r osx-x64
+# Or for Apple Silicon:
+dotnet publish -c Release -r osx-arm64
+```
+
+See `Packaging/macos/Info.plist` for macOS-specific metadata.
+
+### Windows
+
+```bash
+dotnet publish -c Release -r win-x64
+```
+
+## MSBuild Targets
+
+| Target | Trigger | Purpose |
+|--------|---------|---------|
+| `NpmInstall` | Before `GenerateIpcTs` | `npm ci --prefer-offline` |
+| `GenerateIpcTs` | Before `BuildFrontend` | `node Scripts/generate-ipc.mjs` |
+| `BuildFrontend` | Before `Build` | `npm run build` in Frontend/ |
+| `CopyFrontendDist` | After `Build` | Copy dist → wwwroot |
+
+All targets use incremental build (Inputs/Outputs) to avoid unnecessary work.

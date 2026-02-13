@@ -1,0 +1,98 @@
+using HyPrism.Models;
+
+namespace HyPrism.Services.Game.Sources;
+
+/// <summary>
+/// Type of version source.
+/// </summary>
+public enum VersionSourceType
+{
+    /// <summary>
+    /// Official Hytale servers (requires authenticated account).
+    /// </summary>
+    Official,
+
+    /// <summary>
+    /// Community mirror.
+    /// </summary>
+    Mirror
+}
+
+/// <summary>
+/// Unified interface for version data sources.
+/// Both official Hytale API and community mirrors implement this interface,
+/// allowing the VersionService to treat them uniformly.
+/// </summary>
+public interface IVersionSource
+{
+    /// <summary>
+    /// Unique identifier for this source (e.g., "hytale", "mirror-default").
+    /// </summary>
+    string SourceId { get; }
+
+    /// <summary>
+    /// Type of source (Official or Mirror).
+    /// </summary>
+    VersionSourceType Type { get; }
+
+    /// <summary>
+    /// Whether this source is currently available (e.g., authenticated for official).
+    /// </summary>
+    bool IsAvailable { get; }
+
+    /// <summary>
+    /// Priority for merging versions (lower = higher priority).
+    /// Official sources typically have priority 0, mirrors have higher numbers.
+    /// </summary>
+    int Priority { get; }
+
+    /// <summary>
+    /// Whether this source uses diff-based patches for a specific branch.
+    /// Pre-release typically uses diffs (v{from}~{to}), release uses full copies.
+    /// </summary>
+    /// <param name="branch">The branch name.</param>
+    /// <returns>True if the branch uses diff-based patches.</returns>
+    bool IsDiffBasedBranch(string branch);
+
+    /// <summary>
+    /// Fetches available versions with their download URLs for a specific platform and branch.
+    /// </summary>
+    /// <param name="os">OS identifier ("windows", "darwin", "linux").</param>
+    /// <param name="arch">Architecture ("amd64", "arm64").</param>
+    /// <param name="branch">Branch name ("release", "pre-release").</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>List of cached version entries with download URLs.</returns>
+    Task<List<CachedVersionEntry>> GetVersionsAsync(
+        string os, string arch, string branch, CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets the download URL for a specific version.
+    /// </summary>
+    /// <param name="os">OS identifier.</param>
+    /// <param name="arch">Architecture.</param>
+    /// <param name="branch">Branch name.</param>
+    /// <param name="version">Version number.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Download URL, or null if not available.</returns>
+    Task<string?> GetDownloadUrlAsync(
+        string os, string arch, string branch, int version, CancellationToken ct = default);
+
+    /// <summary>
+    /// Gets the diff patch URL between two consecutive versions (for pre-release).
+    /// </summary>
+    /// <param name="os">OS identifier.</param>
+    /// <param name="arch">Architecture.</param>
+    /// <param name="branch">Branch name.</param>
+    /// <param name="fromVersion">Source version.</param>
+    /// <param name="toVersion">Target version.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Diff patch URL, or null if not available.</returns>
+    Task<string?> GetDiffUrlAsync(
+        string os, string arch, string branch, int fromVersion, int toVersion, CancellationToken ct = default);
+
+    /// <summary>
+    /// Pre-fetches/warms the cache for this source.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    Task PreloadAsync(CancellationToken ct = default);
+}

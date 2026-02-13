@@ -24,27 +24,17 @@ obj/
 .vscode/
 
 # Frontend Build outputs
-frontend/node_modules/
-frontend/dist/
+Packaging/flatpak/bundle
 wwwroot/
-packaging/flatpak/bundle
+node_modules/
 
 # IMPORTANT folder (backup)
 IMPORTANT/
-
-# Frontend lock files
-frontend/package-lock.json
-frontend/yarn.lock
-frontend/pnpm-lock.yaml
 
 # Environment files (contains secrets)
 .env
 .env.local
 .env.*.local
-
-# Frontend cache
-frontend/.vite/
-frontend/.turbo/
 
 # Build artifacts
 build/bin/
@@ -86,13 +76,13 @@ flatpak-repo/
 flatpak-build/
 .flatpak-builder/
 *.flatpak
-frontend/package.json.md5
 
 # scripts
 scripts/run.sh
 
 # Build artifacts folder
 artifacts/
+dist/
 dmg-arm64/Applications
 scripts/build-linux-all-ubuntu.sh
 # Python debug scripts
