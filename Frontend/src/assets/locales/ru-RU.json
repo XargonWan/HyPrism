@@ -226,12 +226,11 @@
       "launcherDataFolder": "Папка данных лаунчера",
       "open": "Открыть",
       "resetToDefault": "Сбросить по умолчанию",
-      "changesAfterRestart": "Изменения применятся после перезапуска.",
       "openLauncherFolder": "Открыть папку лаунчера",
       "deleteAllData": "Удалить все данные лаунчера",
-      "cleanData": "Очистка данных",
-      "cleanDataHint": "Удалить временные файлы и кэш",
-      "cleanDataAction": "Очистить временные файлы"
+      "gameRunningWarning": "Некоторые параметры недоступны, пока игра запущена. Закройте игру, чтобы изменить эти настройки.",
+      "movingData": "Перемещение данных...",
+      "movingDataHint": "Перемещение: {{file}}"
     },
     "instanceSettings": {
       "title": "Управление играми",

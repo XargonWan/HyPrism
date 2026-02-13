@@ -17,6 +17,12 @@ Download the latest release from the [GitHub Releases](https://github.com/yyyume
 
 ### Linux
 
+HyPrism uses native Linux dialog tools for folder/file selection. Install at least one of:
+- `zenity`
+- `kdialog`
+- `yad`
+- `qarma`
+
 #### AppImage
 1. Download `HyPrism-linux-x64.AppImage`
 2. Make executable: `chmod +x HyPrism-linux-x64.AppImage`

@@ -75,32 +75,79 @@ public class FileDialogService : IFileDialogService
             }
             else
             {
-                // Linux - use zenity
-                var args = "--file-selection --directory --title=\"Select Folder\"";
-                if (!string.IsNullOrEmpty(initialPath) && Directory.Exists(initialPath))
-                    args += $" --filename=\"{initialPath}/\"";
-                    
-                var psi = new ProcessStartInfo
-                {
-                    FileName = "zenity",
-                    Arguments = args,
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-                
-                using var process = Process.Start(psi);
-                if (process == null) return null;
-                
-                var output = await process.StandardOutput.ReadToEndAsync();
-                await process.WaitForExitAsync();
-                
-                return string.IsNullOrWhiteSpace(output) ? null : output.Trim();
+                return await BrowseFolderLinuxAsync(initialPath);
             }
         }
         catch (Exception ex)
         {
             Logger.Warning("Files", $"Failed to browse folder: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static async Task<string?> BrowseFolderLinuxAsync(string? initialPath)
+    {
+        var safeInitialPath = !string.IsNullOrEmpty(initialPath) && Directory.Exists(initialPath)
+            ? initialPath
+            : null;
+
+        // Preferred order: zenity (GNOME), kdialog (KDE), yad/qarma (alternatives)
+        var candidates = new List<(string fileName, string arguments)>();
+
+        var zenityArgs = "--file-selection --directory --title=\"Select Folder\"";
+        if (!string.IsNullOrEmpty(safeInitialPath))
+            zenityArgs += $" --filename=\"{safeInitialPath}/\"";
+        candidates.Add(("zenity", zenityArgs));
+
+        var kdialogArgs = "--getexistingdirectory";
+        if (!string.IsNullOrEmpty(safeInitialPath))
+            kdialogArgs += $" \"{safeInitialPath}\"";
+        candidates.Add(("kdialog", kdialogArgs));
+
+        var yadArgs = "--file-selection --directory --title=\"Select Folder\"";
+        if (!string.IsNullOrEmpty(safeInitialPath))
+            yadArgs += $" --filename=\"{safeInitialPath}/\"";
+        candidates.Add(("yad", yadArgs));
+
+        var qarmaArgs = "--file-selection --directory --title=\"Select Folder\"";
+        if (!string.IsNullOrEmpty(safeInitialPath))
+            qarmaArgs += $" --filename=\"{safeInitialPath}/\"";
+        candidates.Add(("qarma", qarmaArgs));
+
+        foreach (var (fileName, arguments) in candidates)
+        {
+            var selected = await TryRunLinuxDialogAsync(fileName, arguments);
+            if (!string.IsNullOrWhiteSpace(selected))
+                return selected.Trim();
+        }
+
+        Logger.Warning("Files", "No Linux folder dialog tool available (tried: zenity, kdialog, yad, qarma)");
+        return null;
+    }
+
+    private static async Task<string?> TryRunLinuxDialogAsync(string fileName, string arguments)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = fileName,
+                Arguments = arguments,
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(psi);
+            if (process == null) return null;
+
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            return process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output) ? output.Trim() : null;
+        }
+        catch
+        {
             return null;
         }
     }
@@ -241,5 +288,220 @@ public class FileDialogService : IFileDialogService
         }
 
         return Array.Empty<string>();
+    }
+
+    /// <summary>
+    /// Opens a save file dialog to allow the user to specify a save location.
+    /// </summary>
+    public async Task<string?> SaveFileAsync(string defaultFileName, string filter, string? initialPath = null)
+    {
+        try
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return await SaveFileWindowsAsync(defaultFileName, filter, initialPath);
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                return await SaveFileMacOSAsync(defaultFileName, initialPath);
+            }
+            else
+            {
+                return await SaveFileLinuxAsync(defaultFileName, filter, initialPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Files", $"Failed to show save dialog: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static async Task<string?> SaveFileWindowsAsync(string defaultFileName, string filter, string? initialPath)
+    {
+        // Convert filter format from "Zip files|*.zip" to "Zip files (*.zip)|*.zip"
+        var filterParts = filter.Split('|');
+        var psFilter = filterParts.Length >= 2 ? $"{filterParts[0]} ({filterParts[1]})|{filterParts[1]}" : filter;
+        
+        var script = $@"Add-Type -AssemblyName System.Windows.Forms; $dialog = New-Object System.Windows.Forms.SaveFileDialog; $dialog.Filter = '{psFilter.Replace("'", "''")}'; $dialog.FileName = '{defaultFileName.Replace("'", "''")}'; ";
+        if (!string.IsNullOrEmpty(initialPath) && Directory.Exists(initialPath))
+            script += $@"$dialog.InitialDirectory = '{initialPath.Replace("'", "''")}'; ";
+        script += @"if ($dialog.ShowDialog() -eq 'OK') { $dialog.FileName }";
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "powershell",
+            Arguments = $"-NoProfile -Command \"{script}\"",
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(psi);
+        if (process == null) return null;
+
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        return string.IsNullOrWhiteSpace(output) ? null : output.Trim();
+    }
+
+    private static async Task<string?> SaveFileMacOSAsync(string defaultFileName, string? initialPath)
+    {
+        var initialDir = !string.IsNullOrEmpty(initialPath) && Directory.Exists(initialPath)
+            ? $"default location \"{initialPath}\""
+            : "";
+
+        var script = $@"tell application ""Finder""
+            activate
+            set theFile to choose file name with prompt ""Save As"" default name ""{defaultFileName}"" {initialDir}
+            return POSIX path of theFile
+        end tell";
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "osascript",
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(psi);
+        if (process == null) return null;
+
+        await process.StandardInput.WriteAsync(script);
+        process.StandardInput.Close();
+
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        return string.IsNullOrWhiteSpace(output) ? null : output.Trim();
+    }
+
+    private static async Task<string?> SaveFileLinuxAsync(string defaultFileName, string filter, string? initialPath)
+    {
+        var args = $"--file-selection --save --confirm-overwrite --title=\"Save As\" --filename=\"{defaultFileName}\"";
+        if (!string.IsNullOrEmpty(initialPath) && Directory.Exists(initialPath))
+            args = $"--file-selection --save --confirm-overwrite --title=\"Save As\" --filename=\"{Path.Combine(initialPath, defaultFileName)}\"";
+        
+        // Add file filter for zip
+        if (filter.Contains("*.zip"))
+            args += " --file-filter=\"Zip files | *.zip\"";
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "zenity",
+            Arguments = args,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(psi);
+        if (process == null) return null;
+
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        return process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output) ? output.Trim() : null;
+    }
+
+    /// <summary>
+    /// Opens a file picker dialog configured for selecting ZIP files.
+    /// </summary>
+    public async Task<string?> BrowseZipFileAsync()
+    {
+        try
+        {
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return await BrowseZipFileWindowsAsync();
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                return await BrowseZipFileMacOSAsync();
+            }
+            else
+            {
+                return await BrowseZipFileLinuxAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Files", $"Failed to browse zip file: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static async Task<string?> BrowseZipFileWindowsAsync()
+    {
+        var script = @"Add-Type -AssemblyName System.Windows.Forms; $dialog = New-Object System.Windows.Forms.OpenFileDialog; $dialog.Filter = 'Zip Files (*.zip)|*.zip|All Files (*.*)|*.*'; $dialog.Multiselect = $false; $dialog.Title = 'Select Instance Archive'; if ($dialog.ShowDialog() -eq 'OK') { $dialog.FileName }";
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "powershell",
+            Arguments = $"-NoProfile -Command \"{script}\"",
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(psi);
+        if (process == null) return null;
+
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        return string.IsNullOrWhiteSpace(output) ? null : output.Trim();
+    }
+
+    private static async Task<string?> BrowseZipFileMacOSAsync()
+    {
+        var script = @"tell application ""Finder""
+            activate
+            set theFile to choose file with prompt ""Select Instance Archive"" of type {""zip"", ""public.zip-archive""}
+            return POSIX path of theFile
+        end tell";
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "osascript",
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(psi);
+        if (process == null) return null;
+
+        await process.StandardInput.WriteAsync(script);
+        process.StandardInput.Close();
+
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        return process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output) ? output.Trim() : null;
+    }
+
+    private static async Task<string?> BrowseZipFileLinuxAsync()
+    {
+        var psi = new ProcessStartInfo
+        {
+            FileName = "zenity",
+            Arguments = "--file-selection --title=\"Select Instance Archive\" --file-filter=\"Zip files | *.zip\"",
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(psi);
+        if (process == null) return null;
+
+        var output = await process.StandardOutput.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        return process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output) ? output.Trim() : null;
     }
 }

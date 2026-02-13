@@ -129,6 +129,7 @@ export interface SettingsSnapshot {
   onlineMode: boolean;
   authDomain: string;
   dataDirectory: string;
+  instanceDirectory: string;
   gpuPreference?: string;
   launchOnStartup?: boolean;
   minimizeToTray?: boolean;
@@ -347,6 +348,7 @@ const _settings = {
   update: (data?: unknown) => invoke<{ success: boolean }>('hyprism:settings:update', data),
   launcherPath: (data?: unknown) => invoke<string>('hyprism:settings:launcherPath', data),
   defaultInstanceDir: (data?: unknown) => invoke<string>('hyprism:settings:defaultInstanceDir', data),
+  setInstanceDir: (data?: unknown) => invoke<{ success: boolean, path: string, noop?: boolean, reason?: string, error?: string }>('hyprism:settings:setInstanceDir', data, 300000),
 };
 
 const _i18n = {
@@ -360,6 +362,7 @@ const _window = {
   minimize: (data?: unknown) => send('hyprism:window:minimize', data),
   maximize: (data?: unknown) => send('hyprism:window:maximize', data),
   close: (data?: unknown) => send('hyprism:window:close', data),
+  restart: (data?: unknown) => send('hyprism:window:restart', data),
 };
 
 const _browser = {

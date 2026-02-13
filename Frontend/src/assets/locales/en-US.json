@@ -226,12 +226,11 @@
       "launcherDataFolder": "Launcher Data Folder",
       "open": "Open",
       "resetToDefault": "Reset to Default",
-      "changesAfterRestart": "Changes take effect after restart.",
       "openLauncherFolder": "Open Launcher Folder",
       "deleteAllData": "Delete All Launcher Data",
-      "cleanData": "Clean Data",
-      "cleanDataHint": "Remove temporary files and caches to free up space.",
-      "cleanDataAction": "Clean Temporary Files"
+      "gameRunningWarning": "Some options are unavailable while the game is running. Please close the game to change these settings.",
+      "movingData": "Moving data...",
+      "movingDataHint": "Moving: {{file}}"
     },
     "instanceSettings": {
       "title": "Instance Management",

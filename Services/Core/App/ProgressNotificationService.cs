@@ -64,6 +64,10 @@ public class ProgressNotificationService : IProgressNotificationService
             case "starting":
                 GameStateChanged?.Invoke(state, 0);
                 break;
+            case "started":
+                GameStateChanged?.Invoke(state, 0);
+                _discordService.SetPresence(DiscordService.PresenceState.Playing);
+                break;
             case "running":
                 GameStateChanged?.Invoke(state, 0);
                 _discordService.SetPresence(DiscordService.PresenceState.Playing);

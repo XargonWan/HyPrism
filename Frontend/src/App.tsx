@@ -172,6 +172,7 @@ const App: React.FC = () => {
   const [downloadingVersion, setDownloadingVersion] = useState<number | undefined>(undefined);
   const [downloadState, setDownloadState] = useState<'downloading' | 'extracting' | 'launching'>('downloading');
   const [isGameRunning, setIsGameRunning] = useState<boolean>(false);
+  const [isMovingData, setIsMovingData] = useState<boolean>(false);
   const [runningBranch, setRunningBranch] = useState<string | undefined>(undefined);
   const [runningVersion, setRunningVersion] = useState<number | undefined>(undefined);
   const [downloaded, setDownloaded] = useState<number>(0);
@@ -481,6 +482,10 @@ const App: React.FC = () => {
 
     // Event listeners
     const unsubProgress = EventsOn('progress-update', (data: any) => {
+      if (data.state === 'moving-instances' || data.state === 'moving-instances-complete') {
+        return;
+      }
+
       // Handle cancellation first
       if (data.state === 'cancelled') {
         console.log('Download cancelled event received');
@@ -996,18 +1001,22 @@ const App: React.FC = () => {
               onNavigateToMods={() => {
                 setCurrentPage('instances');
               }}
+              isGameRunning={isGameRunning}
+              onMovingDataChange={setIsMovingData}
             />
           )}
         </AnimatePresence>
       </main>
 
-      {/* Floating Dock Menu */}
-      <DockMenu 
-        activePage={currentPage} 
-        onPageChange={setCurrentPage} 
-        isMuted={isMuted}
-        onToggleMute={handleToggleMute}
-      />
+      {/* Floating Dock Menu - hide during data migration */}
+      {!isMovingData && (
+        <DockMenu 
+          activePage={currentPage} 
+          onPageChange={setCurrentPage} 
+          isMuted={isMuted}
+          onToggleMute={handleToggleMute}
+        />
+      )}
 
       {/* Modals - only essential overlays */}
       

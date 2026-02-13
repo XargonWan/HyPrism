@@ -226,12 +226,11 @@
       "launcherDataFolder": "Dossier des Données du Lanceur",
       "open": "Ouvrir",
       "resetToDefault": "Réinitialiser par défaut",
-      "changesAfterRestart": "Les modifications prennent effet après le redémarrage.",
       "openLauncherFolder": "Ouvrir le Dossier du Lanceur",
       "deleteAllData": "Supprimer Toutes les Données du Lanceur",
-      "cleanData": "Nettoyer les Données",
-      "cleanDataHint": "Supprimer les fichiers temporaires et les caches pour libérer de l'espace.",
-      "cleanDataAction": "Nettoyer les Fichiers Temporaires"
+      "gameRunningWarning": "Certaines options sont indisponibles pendant que le jeu est en cours d'exécution. Veuillez fermer le jeu pour modifier ces paramètres.",
+      "movingData": "Déplacement des données...",
+      "movingDataHint": "Déplacement : {{file}}"
     },
     "instanceSettings": {
       "title": "Gestion des Instances",

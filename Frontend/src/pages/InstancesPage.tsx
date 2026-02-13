@@ -18,9 +18,9 @@ import { CreateInstanceModal } from '../components/modals/CreateInstanceModal';
 import { EditInstanceModal } from '../components/modals/EditInstanceModal';
 
 // IPC calls for instance operations - uses invoke to send to backend
-const ExportInstance = async (branch: string, version: number): Promise<string> => {
+const ExportInstance = async (instanceId: string): Promise<string> => {
   try {
-    return await invoke<string>('hyprism:instance:export', { branch, version });
+    return await invoke<string>('hyprism:instance:export', { instanceId });
   } catch (e) {
     console.warn('[IPC] ExportInstance:', e);
     return '';
@@ -100,9 +100,9 @@ const OpenSaveFolder = (branch: string, version: number, saveName: string): void
 };
 
 // Instance icon IPC calls
-const GetInstanceIcon = async (branch: string, version: number): Promise<string | null> => {
+const GetInstanceIcon = async (instanceId: string): Promise<string | null> => {
   try {
-    return await invoke<string | null>('hyprism:instance:getIcon', { branch, version });
+    return await invoke<string | null>('hyprism:instance:getIcon', { instanceId });
   } catch (e) {
     console.warn('[IPC] GetInstanceIcon:', e);
     return null;
@@ -435,9 +435,9 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
   useEffect(() => {
     const loadIcons = async () => {
       for (const inst of instances) {
-        const key = `${inst.branch}-${inst.version}`;
+        const key = inst.id;
         if (!instanceIcons[key]) {
-          const icon = await GetInstanceIcon(inst.branch, inst.version);
+          const icon = await GetInstanceIcon(inst.id);
           if (icon) {
             setInstanceIcons(prev => ({ ...prev, [key]: icon }));
           }
@@ -480,14 +480,14 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
   }, [installedMods, modsSearchQuery]);
 
   const handleExport = async (inst: InstalledVersionInfo) => {
-    const key = `${inst.branch}-${inst.version}`;
-    setExportingInstance(key);
+    setExportingInstance(inst.id);
     try {
-      const result = await ExportInstance(inst.branch, inst.version);
+      const result = await ExportInstance(inst.id);
       if (result) {
         setMessage({ type: 'success', text: t('instances.exportedSuccess') });
       } else {
-        setMessage({ type: 'error', text: t('instances.exportFailed') });
+        // Empty result means user cancelled - don't show error
+        // setMessage({ type: 'error', text: t('instances.exportFailed') });
       }
     } catch {
       setMessage({ type: 'error', text: t('instances.exportFailed') });
@@ -662,7 +662,7 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
   };
 
   const getInstanceIcon = (inst: InstalledVersionInfo, size: number = 18) => {
-    const key = `${inst.branch}-${inst.version}`;
+    const key = inst.id;
     const customIcon = instanceIcons[key];
     
     if (customIcon) {
@@ -1058,7 +1058,7 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                         disabled={exportingInstance !== null}
                         className="w-full px-4 py-2.5 text-sm text-left text-white/70 hover:text-white hover:bg-white/10 flex items-center gap-2"
                       >
-                        {exportingInstance === `${selectedInstance.branch}-${selectedInstance.version}` ? (
+                        {exportingInstance === selectedInstance.id ? (
                           <Loader2 size={14} className="animate-spin" />
                         ) : (
                           <Upload size={14} />
@@ -1474,7 +1474,7 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
               }}
               instanceId={selectedInstance.id}
               initialName={selectedInstance.customName || getInstanceDisplayName(selectedInstance)}
-              initialIconUrl={instanceIcons[`${selectedInstance.branch}-${selectedInstance.version}`]}
+              initialIconUrl={instanceIcons[selectedInstance.id]}
             />
           </>
         ) : instances.length === 0 ? (

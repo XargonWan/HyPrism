@@ -313,43 +313,5 @@ public class SettingsService : ISettingsService
         return true;
     }
 
-    // ========== Launcher Data Directory Settings ==========
-    
-    /// <inheritdoc/>
-    public string GetLauncherDataDirectory() => _configService.Configuration.LauncherDataDirectory;
-    
-    /// <inheritdoc/>
-    public Task<string?> SetLauncherDataDirectoryAsync(string path)
-    {
-        try
-        {
-            // If path is empty or whitespace, clear the custom launcher data directory
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                _configService.Configuration.LauncherDataDirectory = "";
-                _configService.SaveConfig();
-                Logger.Success("Config", "Launcher data directory cleared, will use default on next restart");
-                return Task.FromResult<string?>(null);
-            }
-
-            var expanded = Environment.ExpandEnvironmentVariables(path.Trim());
-
-            if (!Path.IsPathRooted(expanded))
-            {
-                expanded = Path.GetFullPath(expanded);
-            }
-
-            // Just save the path, the change takes effect on next restart
-            _configService.Configuration.LauncherDataDirectory = expanded;
-            _configService.SaveConfig();
-
-            Logger.Success("Config", $"Launcher data directory set to {expanded} (takes effect on restart)");
-            return Task.FromResult<string?>(expanded);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error("Config", $"Failed to set launcher data directory: {ex.Message}");
-            return Task.FromResult<string?>(null);
-        }
-    }
+    public string GetInstanceDirectory() => _configService.Configuration.InstanceDirectory;
 }

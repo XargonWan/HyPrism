@@ -226,12 +226,11 @@
       "launcherDataFolder": "Carpeta de Datos del Launcher",
       "open": "Abrir",
       "resetToDefault": "Restablecer",
-      "changesAfterRestart": "Los cambios se aplicarán tras reiniciar.",
       "openLauncherFolder": "Abrir Carpeta del Launcher",
       "deleteAllData": "Eliminar Todos los Datos",
-      "cleanData": "Limpiar datos",
-      "cleanDataHint": "Eliminar archivos temporales y cachés para liberar espacio.",
-      "cleanDataAction": "Limpiar archivos temporales"
+      "gameRunningWarning": "Algunas opciones no están disponibles mientras el juego está en ejecución. Cierra el juego para cambiar estos ajustes.",
+      "movingData": "Moviendo datos...",
+      "movingDataHint": "Moviendo: {{file}}"
     },
     "instanceSettings": {
       "title": "Gestión de instancias",

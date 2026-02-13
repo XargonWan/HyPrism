@@ -226,12 +226,11 @@
       "launcherDataFolder": "启动器数据文件夹",
       "open": "打开",
       "resetToDefault": "重置为默认",
-      "changesAfterRestart": "更改将在重启后生效。",
       "openLauncherFolder": "打开启动器文件夹",
       "deleteAllData": "删除所有启动器数据",
-      "cleanData": "清理数据",
-      "cleanDataHint": "删除临时文件和缓存以释放空间。",
-      "cleanDataAction": "清理临时文件"
+      "gameRunningWarning": "游戏运行时某些选项不可用。请关闭游戏以更改这些设置。",
+      "movingData": "正在移动数据...",
+      "movingDataHint": "正在移动：{{file}}"
     },
     "instanceSettings": {
       "title": "实例管理",

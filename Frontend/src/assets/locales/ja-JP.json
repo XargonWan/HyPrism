@@ -190,12 +190,11 @@
       "launcherDataFolder": "ランチャーデータフォルダ",
       "open": "開く",
       "resetToDefault": "デフォルトにリセット",
-      "changesAfterRestart": "変更は再起動後に適用されます。",
       "openLauncherFolder": "ランチャーフォルダを開く",
       "deleteAllData": "すべてのランチャーデータを削除",
-      "cleanData": "データをクリーンアップ",
-      "cleanDataHint": "一時ファイルとキャッシュを削除して空き容量を確保",
-      "cleanDataAction": "一時ファイルを削除"
+      "gameRunningWarning": "ゲーム実行中は一部のオプションを変更できません。これらの設定を変更するにはゲームを終了してください。",
+      "movingData": "データを移動中...",
+      "movingDataHint": "移動中: {{file}}"
     },
     "instanceSettings": {
       "title": "インスタンス管理",

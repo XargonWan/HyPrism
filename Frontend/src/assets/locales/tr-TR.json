@@ -226,12 +226,11 @@
       "launcherDataFolder": "Başlatıcı Veri Klasörü",
       "open": "Aç",
       "resetToDefault": "Varsayılana Sıfırla",
-      "changesAfterRestart": "Değişiklikler yeniden başlatmadan sonra geçerli olur.",
       "openLauncherFolder": "Başlatıcı Klasörünü Aç",
       "deleteAllData": "Tüm Başlatıcı Verilerini Sil",
-      "cleanData": "Verileri Temizle",
-      "cleanDataHint": "Yer açmak için geçici dosyaları ve önbellekleri kaldırın.",
-      "cleanDataAction": "Geçici Dosyaları Temizle"
+      "gameRunningWarning": "Oyun çalışırken bazı seçenekler kullanılamaz. Bu ayarları değiştirmek için lütfen oyunu kapatın.",
+      "movingData": "Veriler taşınıyor...",
+      "movingDataHint": "Taşınıyor: {{file}}"
     },
     "instanceSettings": {
       "title": "Örnek Yönetimi",

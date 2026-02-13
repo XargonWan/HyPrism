@@ -226,12 +226,11 @@
       "launcherDataFolder": "런처 데이터 폴더",
       "open": "열기",
       "resetToDefault": "기본값으로 재설정",
-      "changesAfterRestart": "재시작 후 변경 사항이 적용됩니다.",
       "openLauncherFolder": "런처 폴더 열기",
       "deleteAllData": "모든 런처 데이터 삭제",
-      "cleanData": "데이터 정리",
-      "cleanDataHint": "임시 파일 및 캐시를 제거하여 공간 확보",
-      "cleanDataAction": "임시 파일 정리"
+      "gameRunningWarning": "게임이 실행 중일 때 일부 옵션을 사용할 수 없습니다. 이 설정을 변경하려면 게임을 종료하세요.",
+      "movingData": "데이터 이동 중...",
+      "movingDataHint": "이동 중: {{file}}"
     },
     "instanceSettings": {
       "title": "인스턴스 관리",

@@ -76,11 +76,6 @@ public class Config
     public string BackgroundMode { get; set; } = "auto";
     
     /// <summary>
-    /// Custom launcher data directory. If set, overrides the default app data location.
-    /// </summary>
-    public string LauncherDataDirectory { get; set; } = "";
-    
-    /// <summary>
     /// Current interface language code (e.g., "en-US", "ru-RU", "de-DE")
     /// </summary>
     public string Language { get; set; } = "en-US";

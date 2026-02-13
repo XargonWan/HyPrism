@@ -48,28 +48,7 @@ public class UtilityService
             return envDir;
         }
 
-        // Then check if there's a config file in default location with custom path
-        var defaultDir = GetDefaultAppDir();
-        var defaultConfigPath = Path.Combine(defaultDir, "config.json");
-        if (File.Exists(defaultConfigPath))
-        {
-            try
-            {
-                var configJson = File.ReadAllText(defaultConfigPath);
-                var config = System.Text.Json.JsonSerializer.Deserialize<HyPrism.Models.Config>(configJson, new System.Text.Json.JsonSerializerOptions
-                {
-                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
-                    PropertyNameCaseInsensitive = true
-                });
-                if (config != null && !string.IsNullOrWhiteSpace(config.LauncherDataDirectory) && Directory.Exists(config.LauncherDataDirectory))
-                {
-                    return config.LauncherDataDirectory;
-                }
-            }
-            catch { /* Ignore parsing errors, use default */ }
-        }
-
-        return defaultDir;
+        return GetDefaultAppDir();
     }
 
     /// <summary>

@@ -112,11 +112,10 @@ Use the profile menu to:
 
 The config file is JSON and can be edited manually, but it's recommended to use the Settings page.
 
-### Custom Data Directory
+### Data Directory
 
-You can change where HyPrism stores its data:
+HyPrism uses a fixed launcher data directory based on your platform default.
 
-1. Open **Settings** → **Advanced**
-2. Set **Data directory** to your preferred path
-3. Restart the launcher
-4. Existing data will need to be moved manually
+- The path is shown in **Settings** → **Data**
+- Launcher data directory relocation is not supported
+- The launcher provides an **Open** button to open the containing folder

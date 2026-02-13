@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
-import { FileText, RefreshCw, Trash2, Copy, Check, Download, Search } from 'lucide-react';
+import { FileText, RefreshCw, Copy, Check, Download, Search } from 'lucide-react';
 import { useAccentColor } from '../contexts/AccentColorContext';
 import { invoke } from '@/lib/ipc';
 
@@ -200,11 +200,6 @@ export const LogsPage: React.FC = () => {
     URL.revokeObjectURL(url);
   }, [filteredLogs]);
 
-  const handleClear = useCallback(() => {
-    setLogs([]);
-    setSelectedIndices(new Set());
-  }, []);
-
   const levelFilters: { value: LogLevel; label: string; color: string }[] = [
     { value: 'all', label: t('logs.filter.all'), color: 'text-white/70' },
     { value: 'INF', label: t('logs.filter.info'), color: 'text-gray-300' },
@@ -281,16 +276,6 @@ export const LogsPage: React.FC = () => {
             title={t('logs.export')}
           >
             <Download size={16} />
-          </button>
-
-          {/* Clear */}
-          <button
-            onClick={handleClear}
-            className="p-2 rounded-lg text-white/60 hover:text-red-400 transition-all"
-            style={panelStyle}
-            title={t('logs.clear')}
-          >
-            <Trash2 size={16} />
           </button>
         </div>
       </div>

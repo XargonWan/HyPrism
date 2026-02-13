@@ -17,6 +17,12 @@
 
 ### Linux
 
+HyPrism использует нативные Linux-утилиты диалогов для выбора папок и файлов. Установите хотя бы одну из них:
+- `zenity`
+- `kdialog`
+- `yad`
+- `qarma`
+
 #### AppImage
 1. Скачайте `HyPrism-linux-x64.AppImage`
 2. Сделайте файл исполняемым: `chmod +x HyPrism-linux-x64.AppImage`

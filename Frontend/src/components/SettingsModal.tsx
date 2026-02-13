@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { motion, AnimatePresence } from 'framer-motion';
 import { X, Github, Bug, Check, AlertTriangle, ChevronDown, ExternalLink, Power, FolderOpen, Trash2, Settings, Database, Globe, Code, Image, Loader2, FlaskConical, RotateCcw, Monitor, Zap, Download, HardDrive, Package, Box, Wifi, Server, Edit3 } from 'lucide-react';
-import { ipc } from '@/lib/ipc';
+import { ipc, on } from '@/lib/ipc';
 import { changeLanguage } from '../i18n';
 
 // Alias for compatibility — maps to ipc.browser.open
@@ -27,7 +28,7 @@ async function GetCloseAfterLaunch(): Promise<boolean> { return (await ipc.setti
 async function SetCloseAfterLaunch(v: boolean): Promise<void> { await ipc.settings.update({ closeAfterLaunch: v }); }
 async function GetBackgroundMode(): Promise<string> { return (await ipc.settings.get()).backgroundMode ?? 'image'; }
 async function SetBackgroundMode(v: string): Promise<void> { await ipc.settings.update({ backgroundMode: v }); }
-async function GetCustomInstanceDir(): Promise<string> { return (await ipc.settings.get()).dataDirectory ?? ''; }
+async function GetCustomInstanceDir(): Promise<string> { return (await ipc.settings.get()).instanceDirectory ?? ''; }
 async function GetNick(): Promise<string> { return (await ipc.profile.get()).nick ?? 'HyPrism'; }
 async function GetUUID(): Promise<string> { return (await ipc.profile.get()).uuid ?? ''; }
 async function GetAvatarPreview(): Promise<string | null> { return (await ipc.profile.get()).avatarPath ?? null; }
@@ -37,10 +38,12 @@ async function GetDiscordLink(): Promise<string> { console.warn('[IPC] GetDiscor
 // Real IPC functions that now have channels
 async function GetLauncherFolderPath(): Promise<string> { return ipc.settings.launcherPath(); }
 async function GetDefaultInstanceDir(): Promise<string> { return ipc.settings.defaultInstanceDir(); }
-async function SetInstanceDirectory(path: string): Promise<void> { await ipc.settings.setInstanceDir(path); }
+async function SetInstanceDirectory(path: string): Promise<{ success: boolean, path: string }> { 
+    const result = await ipc.settings.setInstanceDir(path); 
+    console.log('[IPC] SetInstanceDirectory result:', result);
+    return result;
+}
 async function BrowseFolder(initialPath?: string): Promise<string> { return (await ipc.file.browseFolder(initialPath)) ?? ''; }
-async function GetLauncherDataDirectory(): Promise<string> { return (await ipc.settings.get()).dataDirectory ?? ''; }
-async function SetLauncherDataDirectory(path: string): Promise<void> { await ipc.settings.setLauncherDataDir(path); }
 
 // TODO: These still need dedicated IPC channels
 const _stub = <T,>(name: string, fb: T) => async (..._a: any[]): Promise<T> => { console.warn(`[IPC] ${name}: no channel`); return fb; };
@@ -93,6 +96,8 @@ interface SettingsModalProps {
     onInstanceDeleted?: () => void;
     onAuthSettingsChange?: () => void;
     pageMode?: boolean;
+    isGameRunning?: boolean;
+    onMovingDataChange?: (isMoving: boolean) => void;
 }
 
 type SettingsTab = 'general' | 'visual' | 'network' | 'graphics' | 'language' | 'data' | 'instances' | 'about' | 'developer';
@@ -110,14 +115,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onAccentColorChange,
     onInstanceDeleted,
     onAuthSettingsChange,
-    pageMode: isPageMode = false
+    pageMode: isPageMode = false,
+    isGameRunning = false,
+    onMovingDataChange
 }) => {
     const { i18n, t } = useTranslation();
     const [activeTab, setActiveTab] = useState<SettingsTab>('general');
     const [isLanguageOpen, setIsLanguageOpen] = useState(false);
     const [isBranchOpen, setIsBranchOpen] = useState(false);
-    const [showTranslationConfirm, setShowTranslationConfirm] = useState<{ langName: string; langCode: string; searchQuery: string } | null>(null);
-    const [dontAskAgain, setDontAskAgain] = useState(false);
+
     const [selectedLauncherBranch, setSelectedLauncherBranch] = useState(launcherBranch);
     const [closeAfterLaunch, setCloseAfterLaunch] = useState(false);
     const [launcherFolderPath, setLauncherFolderPath] = useState('');
@@ -133,6 +139,17 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const [gpuPreference, setGpuPreferenceState] = useState<string>('dedicated');
     const [gpuAdapters, setGpuAdapters] = useState<Array<{ name: string; vendor: string; type: string }>>([]);
     const [hasSingleGpu, setHasSingleGpu] = useState(false);
+    
+    // Data move progress state
+    const [isMovingData, setIsMovingData] = useState(false);
+    const [moveProgress, setMoveProgress] = useState(0);
+    const [moveCurrentFile, setMoveCurrentFile] = useState('');
+    
+    // Notify parent about moving state change (for hiding navigation)
+    useEffect(() => {
+        onMovingDataChange?.(isMovingData);
+    }, [isMovingData, onMovingDataChange]);
+    
     const { accentColor, accentTextColor, setAccentColor: setAccentColorContext } = useAccentColor();
 
     // Glass-aware control background class for toggle rows, dropdowns, inputs
@@ -175,16 +192,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 setLauncherFolderPath(folderPath);
                 
                 const customDir = await GetCustomInstanceDir();
-                setInstanceDir(customDir || folderPath); // Show real path
+                const defaultInstanceDir = await GetDefaultInstanceDir();
+                setInstanceDir(customDir || defaultInstanceDir); // Show real path
 
                 const online = (await ipc.settings.get()).onlineMode ?? true;
                 setOnlineMode(online);
                 
                 const bgMode = await GetBackgroundMode();
                 setBackgroundModeState(bgMode);
-                
-                const dataDir = await GetLauncherDataDirectory();
-                setLauncherDataDir(dataDir || folderPath); // Show real path
+
+                setLauncherDataDir(folderPath);
                 
                 // Load GPU preference and adapters
                 const gpu = (await ipc.settings.get()).gpuPreference ?? 'dedicated';
@@ -246,6 +263,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         };
         loadSettings();
     }, []);
+
+    // Subscribe to data move progress events
+    useEffect(() => {
+        const unsub = on('hyprism:game:progress', (data: any) => {
+            if (data.state === 'moving-instances') {
+                setIsMovingData(true);
+                setMoveProgress(data.progress ?? 0);
+                // Extract filename from args if available
+                if (Array.isArray(data.args) && data.args.length > 0) {
+                    setMoveCurrentFile(String(data.args[0]));
+                }
+            } else if (data.state === 'moving-instances-complete' && isMovingData) {
+                setMoveProgress(100);
+                setTimeout(() => {
+                    setIsMovingData(false);
+                    setMoveProgress(0);
+                    setMoveCurrentFile('');
+                }, 1500);
+            }
+        });
+        return unsub;
+    }, [isMovingData]);
 
     // Load contributors when About tab is active
     useEffect(() => {
@@ -361,9 +400,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         const handleEscape = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                if (showTranslationConfirm) {
-                    setShowTranslationConfirm(null);
-                } else if (showAllBackgrounds) {
+                if (showAllBackgrounds) {
                     setShowAllBackgrounds(false);
                 } else {
                     onClose();
@@ -377,7 +414,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             document.removeEventListener('mousedown', handleClickOutside);
             document.removeEventListener('keydown', handleEscape);
         };
-    }, [onClose, showTranslationConfirm, showAllBackgrounds]);
+    }, [onClose, showAllBackgrounds]);
 
     const handleLanguageSelect = async (langCode: Language) => {
         setIsLanguageOpen(false);
@@ -388,40 +425,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         } catch (error) {
             console.warn('Failed to change language:', error);
         }
-
-        if (localStorage.getItem('suppressTranslationPrompt') === 'true') {
-            return;
-        }
-
-        if (langCode !== Language.ENGLISH && onShowModManager) {
-            const langConfig = LANGUAGE_CONFIG[langCode];
-            if (langConfig) {
-                setDontAskAgain(false);
-                setShowTranslationConfirm({
-                    langName: langConfig.nativeName,
-                    langCode: langCode,
-                    searchQuery: langConfig.searchQuery
-                });
-            }
-        }
     };
 
-    const handleTranslationConfirm = () => {
-        if (showTranslationConfirm && onShowModManager) {
-            if (dontAskAgain) {
-                localStorage.setItem('suppressTranslationPrompt', 'true');
-            }
-            onShowModManager();
-        }
-        setShowTranslationConfirm(null);
-    };
 
-    const handleTranslationDismiss = () => {
-        if (dontAskAgain) {
-            localStorage.setItem('suppressTranslationPrompt', 'true');
-        }
-        setShowTranslationConfirm(null);
-    };
 
     const handleLauncherBranchChange = async (branch: string) => {
         setSelectedLauncherBranch(branch);
@@ -458,11 +464,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         try {
             const selectedPath = await BrowseFolder(instanceDir || launcherFolderPath);
             if (selectedPath) {
-                setInstanceDir(selectedPath);
-                await SetInstanceDirectory(selectedPath);
+                console.log('[SettingsModal] Setting instance directory to:', selectedPath);
+                setIsMovingData(true);
+                setMoveProgress(0);
+                setMoveCurrentFile('');
+                
+                const result = await SetInstanceDirectory(selectedPath);
+                if (result.success) {
+                    setInstanceDir(result.path || selectedPath);
+                    console.log('[SettingsModal] Instance directory updated successfully');
+                } else {
+                    console.error('[SettingsModal] Failed to set instance directory');
+                    setIsMovingData(false);
+                }
             }
         } catch (err) {
             console.error('Failed to set instance directory:', err);
+            setIsMovingData(false);
         }
     };
 
@@ -476,34 +494,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         }
     };
 
-    const handleBrowseLauncherDataDir = async () => {
-        try {
-            const selectedPath = await BrowseFolder(launcherDataDir || launcherFolderPath);
-            if (selectedPath) {
-                setLauncherDataDir(selectedPath);
-                await SetLauncherDataDirectory(selectedPath);
-            }
-        } catch (err) {
-            console.error('Failed to browse folder:', err);
-        }
-    };
 
     const handleResetInstanceDir = async () => {
         try {
             const defaultDir = await GetDefaultInstanceDir();
-            setInstanceDir(defaultDir);
-            await SetInstanceDirectory(defaultDir);
+            console.log('[SettingsModal] Resetting instance directory to default (empty config path)');
+            setIsMovingData(true);
+            setMoveProgress(0);
+            setMoveCurrentFile('');
+
+            const result = await SetInstanceDirectory('');
+            if (result.success) {
+                setInstanceDir(result.path || defaultDir);
+            } else {
+                setIsMovingData(false);
+            }
         } catch (err) {
             console.error('Failed to reset instance directory:', err);
-        }
-    };
-
-    const handleResetLauncherDataDir = async () => {
-        try {
-            setLauncherDataDir(launcherFolderPath);
-            await SetLauncherDataDirectory(launcherFolderPath);
-        } catch (err) {
-            console.error('Failed to reset launcher data directory:', err);
+            setIsMovingData(false);
         }
     };
 
@@ -1189,6 +1197,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             {/* Data Tab */}
                             {activeTab === 'data' && (
                                 <div className="space-y-6">
+                                    {/* Game Running Warning */}
+                                    {isGameRunning && (
+                                        <div className="p-4 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center gap-3">
+                                            <AlertTriangle size={20} className="text-yellow-400 flex-shrink-0" />
+                                            <p className="text-sm text-yellow-400">{t('settings.dataSettings.gameRunningWarning')}</p>
+                                        </div>
+                                    )}
+                                    
                                     {/* Instance Folder */}
                                     <div>
                                         <label className="block text-sm text-white/60 mb-2">{t('settings.dataSettings.instanceFolder')}</label>
@@ -1196,18 +1212,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                             <input
                                                 type="text"
                                                 value={instanceDir}
-                                                onChange={(e) => setInstanceDir(e.target.value)}
-                                                onBlur={async () => {
-                                                    if (instanceDir.trim()) {
-                                                        await SetInstanceDirectory(instanceDir.trim());
-                                                    }
-                                                }}
-                                                className={`flex-1 h-12 px-4 rounded-xl ${gc} text-white text-sm focus:outline-none focus:border-white/30`}
+                                                readOnly
+                                                className={`flex-1 h-12 px-4 rounded-xl ${gc} text-white text-sm focus:outline-none cursor-default`}
                                             />
                                             <div className={`flex rounded-full overflow-hidden ${gc}`}>
                                                 <button
                                                     onClick={handleResetInstanceDir}
-                                                    className={`h-12 px-4 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/5 transition-colors`}
+                                                    disabled={isGameRunning}
+                                                    className={`h-12 px-4 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-white/60`}
                                                     title={t('settings.dataSettings.resetToDefault')}
                                                 >
                                                     <RotateCcw size={18} />
@@ -1216,7 +1228,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                                 <div className="w-px bg-white/10" />
                                                 <button
                                                     onClick={handleBrowseInstanceDir}
-                                                    className={`h-12 px-4 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/5 transition-colors`}
+                                                    disabled={isGameRunning}
+                                                    className={`h-12 px-4 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-white/60`}
                                                     title={t('common.browse')}
                                                 >
                                                     <FolderOpen size={18} />
@@ -1242,33 +1255,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                             <input
                                                 type="text"
                                                 value={launcherDataDir}
-                                                onChange={(e) => setLauncherDataDir(e.target.value)}
-                                                onBlur={async () => {
-                                                    if (launcherDataDir.trim()) {
-                                                        await SetLauncherDataDirectory(launcherDataDir.trim());
-                                                    }
-                                                }}
-                                                className={`flex-1 h-12 px-4 rounded-xl ${gc} text-white text-sm focus:outline-none focus:border-white/30`}
+                                                readOnly
+                                                className={`flex-1 h-12 px-4 rounded-xl ${gc} text-white text-sm focus:outline-none cursor-default`}
                                             />
                                             <div className={`flex rounded-full overflow-hidden ${gc}`}>
-                                                <button
-                                                    onClick={handleResetLauncherDataDir}
-                                                    className={`h-12 px-4 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/5 transition-colors`}
-                                                    title={t('settings.dataSettings.resetToDefault')}
-                                                >
-                                                    <RotateCcw size={18} />
-                                                    <span className="ml-2 text-sm">{t('common.reset')}</span>
-                                                </button>
-                                                <div className="w-px bg-white/10" />
-                                                <button
-                                                    onClick={handleBrowseLauncherDataDir}
-                                                    className={`h-12 px-4 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/5 transition-colors`}
-                                                    title={t('common.browse')}
-                                                >
-                                                    <FolderOpen size={18} />
-                                                    <span className="ml-2 text-sm">{t('common.select')}</span>
-                                                </button>
-                                                <div className="w-px bg-white/10" />
                                                 <button
                                                     onClick={() => BrowserOpenURL(`file://${launcherDataDir}`)}
                                                     className={`h-12 px-4 flex items-center justify-center text-white/60 hover:text-white hover:bg-white/5 transition-colors`}
@@ -1279,7 +1269,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                                                 </button>
                                             </div>
                                         </div>
-                                        <p className="mt-2 text-xs text-white/40">{t('settings.dataSettings.changesAfterRestart')}</p>
                                     </div>
 
                                     {/* Launcher Folder Actions */}
@@ -1483,44 +1472,62 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
             </div>
 
-            {/* Translation Confirmation Modal */}
-            {showTranslationConfirm && (
-                <div className={`fixed inset-0 z-[250] flex items-center justify-center bg-[#0a0a0a]/90`}>
-                    <div className={`p-6 max-w-md w-full mx-4 glass-panel-static-solid`}>
-                        <h3 className="text-lg font-bold text-white mb-3">{t('settings.languageChanged.title')}</h3>
-                        <p className="text-white/70 text-sm mb-4">
-                            {t('settings.languageChanged.message', { language: showTranslationConfirm.langName })}
-                        </p>
-                        
-                        <label className="flex items-center gap-2 mb-4 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={dontAskAgain}
-                                onChange={(e) => setDontAskAgain(e.target.checked)}
-                                className="w-4 h-4 rounded"
-                                style={{ accentColor: accentColor }}
-                            />
-                            <span className="text-sm text-white/60">{t('settings.languageChanged.dontAskAgain')}</span>
-                        </label>
-
-                        <div className="flex gap-3">
-                            <button
-                                onClick={handleTranslationDismiss}
-                                className="flex-1 h-10 rounded-xl bg-white/5 text-white/70 hover:bg-white/10 transition-colors"
+            {/* Data Moving Overlay */}
+            <AnimatePresence>
+                {isMovingData && (
+                    <motion.div 
+                        className="fixed inset-0 z-[300] flex items-center justify-center bg-[#0a0a0a]/95"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                    >
+                        <motion.div 
+                            className="max-w-lg w-full mx-8 text-center"
+                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                            transition={{ duration: 0.25, delay: 0.05 }}
+                        >
+                            <motion.div
+                                key="moving-progress"
+                                initial={{ opacity: 0, y: 6, scale: 0.99 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                                transition={{ duration: 0.3, ease: 'easeOut' }}
                             >
-                                {t('settings.languageChanged.noThanks')}
-                            </button>
-                            <button
-                                onClick={handleTranslationConfirm}
-                                className="flex-1 h-10 rounded-xl font-medium transition-colors"
-                                style={{ backgroundColor: accentColor, color: accentTextColor }}
-                            >
-                                {t('settings.languageChanged.searchMods')}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+                                <h2 className="text-2xl font-bold text-white mb-2">{t('settings.dataSettings.movingData')}</h2>
+                                <p className="text-white/60 mb-8">{t('settings.dataSettings.movingDataHint', { file: moveCurrentFile || '...' })}</p>
+                                
+                                {/* Progress bar */}
+                                <div className="relative h-3 bg-white/10 rounded-full overflow-hidden mb-4">
+                                    <motion.div 
+                                        className="absolute inset-y-0 left-0 rounded-full"
+                                        initial={{ width: 0 }}
+                                        animate={{ width: `${moveProgress}%` }}
+                                        transition={{ duration: 0.3, ease: 'easeOut' }}
+                                        style={{ backgroundColor: accentColor }}
+                                    />
+                                    {moveProgress === 0 && (
+                                        <motion.div 
+                                            className="absolute inset-y-0 w-1/3 rounded-full"
+                                            style={{
+                                                background: `linear-gradient(90deg, transparent, ${accentColor}80, transparent)`
+                                            }}
+                                            animate={{ x: ['-100%', '400%'] }}
+                                            transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
+                                        />
+                                    )}
+                                </div>
+                                
+                                <div className="flex justify-center text-sm">
+                                    <span className="text-white/80">{moveProgress > 0 ? `${moveProgress}%` : ''}</span>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Delete Confirmation Modal */}
             {showDeleteConfirm && (

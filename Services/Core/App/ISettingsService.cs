@@ -219,15 +219,8 @@ public interface ISettingsService
     bool SetGpuPreference(string preference);
     
     /// <summary>
-    /// Gets the current launcher data directory path.
+    /// Gets the current instance directory path.
     /// </summary>
-    /// <returns>The absolute path to the launcher data directory.</returns>
-    string GetLauncherDataDirectory();
-    
-    /// <summary>
-    /// Sets a custom launcher data directory with validation and migration.
-    /// </summary>
-    /// <param name="directory">The new directory path for launcher data.</param>
-    /// <returns>The new directory path if successful, or <c>null</c> if invalid.</returns>
-    Task<string?> SetLauncherDataDirectoryAsync(string directory);
+    /// <returns>The absolute path to the instances directory.</returns>
+    string GetInstanceDirectory();
 }

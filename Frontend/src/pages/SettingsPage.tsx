@@ -20,6 +20,8 @@ interface SettingsPageProps {
   onInstanceDeleted?: () => void;
   onNavigateToMods?: () => void;
   onAuthSettingsChange?: () => void;
+  isGameRunning?: boolean;
+  onMovingDataChange?: (isMoving: boolean) => void;
 }
 
 export const SettingsPage: React.FC<SettingsPageProps> = (props) => {
@@ -60,6 +62,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = (props) => {
             onInstanceDeleted={props.onInstanceDeleted}
             onAuthSettingsChange={props.onAuthSettingsChange}
             pageMode={true}
+            isGameRunning={props.isGameRunning}
+            onMovingDataChange={props.onMovingDataChange}
           />
         </Suspense>
       </div>

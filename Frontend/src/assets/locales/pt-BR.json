@@ -226,12 +226,11 @@
       "launcherDataFolder": "Pasta de Dados do Launcher",
       "open": "Abrir",
       "resetToDefault": "Restaurar Padrão",
-      "changesAfterRestart": "Alterações terão efeito após reiniciar.",
       "openLauncherFolder": "Abrir Pasta do Launcher",
       "deleteAllData": "Excluir Todos os Dados do Launcher",
-      "cleanData": "Limpar Dados",
-      "cleanDataHint": "Remover arquivos temporários e caches para liberar espaço.",
-      "cleanDataAction": "Limpar Arquivos Temporários"
+      "gameRunningWarning": "Algumas opções não estão disponíveis enquanto o jogo está em execução. Feche o jogo para alterar essas configurações.",
+      "movingData": "Movendo dados...",
+      "movingDataHint": "Movendo: {{file}}"
     },
     "instanceSettings": {
       "title": "Gerenciamento de Instâncias",

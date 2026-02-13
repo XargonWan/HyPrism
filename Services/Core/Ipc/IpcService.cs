@@ -42,7 +42,7 @@ namespace HyPrism.Services.Core.Ipc;
 /// @type Profile { id: string; name: string; uuid?: string; isOfficial?: boolean; avatar?: string; folderName?: string; }
 /// @type HytaleAuthStatus { loggedIn: boolean; username?: string; uuid?: string; error?: string; errorType?: string; }
 /// @type ProfileSnapshot { nick: string; uuid: string; avatarPath?: string; }
-/// @type SettingsSnapshot { language: string; musicEnabled: boolean; launcherBranch: string; closeAfterLaunch: boolean; showDiscordAnnouncements: boolean; disableNews: boolean; backgroundMode: string; availableBackgrounds: string[]; accentColor: string; hasCompletedOnboarding: boolean; onlineMode: boolean; authDomain: string; dataDirectory: string; gpuPreference?: string; launchOnStartup?: boolean; minimizeToTray?: boolean; animations?: boolean; transparency?: boolean; resolution?: string; ramMb?: number; sound?: boolean; closeOnLaunch?: boolean; developerMode?: boolean; verboseLogging?: boolean; preRelease?: boolean; [key: string]: unknown; }
+/// @type SettingsSnapshot { language: string; musicEnabled: boolean; launcherBranch: string; closeAfterLaunch: boolean; showDiscordAnnouncements: boolean; disableNews: boolean; backgroundMode: string; availableBackgrounds: string[]; accentColor: string; hasCompletedOnboarding: boolean; onlineMode: boolean; authDomain: string; dataDirectory: string; instanceDirectory: string; gpuPreference?: string; launchOnStartup?: boolean; minimizeToTray?: boolean; animations?: boolean; transparency?: boolean; resolution?: string; ramMb?: number; sound?: boolean; closeOnLaunch?: boolean; developerMode?: boolean; verboseLogging?: boolean; preRelease?: boolean; [key: string]: unknown; }
 /// @type ModScreenshot { id: number; title: string; thumbnailUrl: string; url: string; }
 /// @type ModInfo { id: string; name: string; slug: string; summary: string; author: string; downloadCount: number; iconUrl: string; thumbnailUrl: string; categories: string[]; dateUpdated: string; latestFileId: string; screenshots: ModScreenshot[]; }
 /// @type ModSearchResult { mods: ModInfo[]; totalCount: number; }
@@ -586,22 +586,48 @@ public class IpcService
         {
             try
             {
+                var fileDialog = _services.GetRequiredService<IFileDialogService>();
                 var json = ArgsToJson(args);
                 var data = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, JsonOpts);
-                var branch = data?["branch"].GetString() ?? "release";
-                var version = data?["version"].GetInt32() ?? 0;
+                var instanceId = data?.TryGetValue("instanceId", out var idEl) == true ? idEl.GetString() : null;
                 
-                var instancePath = instanceService.GetInstancePath(branch, version);
-                if (!Directory.Exists(instancePath))
+                // Support both instanceId and legacy branch/version
+                string? instancePath;
+                string defaultFileName;
+                
+                if (!string.IsNullOrEmpty(instanceId))
+                {
+                    instancePath = instanceService.GetInstancePathById(instanceId);
+                    defaultFileName = $"HyPrism-{instanceId.Substring(0, Math.Min(8, instanceId.Length))}_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
+                }
+                else
+                {
+                    var branch = data?["branch"].GetString() ?? "release";
+                    var version = data?["version"].GetInt32() ?? 0;
+                    instancePath = instanceService.GetInstancePath(branch, version);
+                    defaultFileName = $"HyPrism-{branch}-v{version}_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
+                }
+                
+                if (string.IsNullOrEmpty(instancePath) || !Directory.Exists(instancePath))
                 {
                     Reply("hyprism:instance:export:reply", "");
                     return;
                 }
 
-                // Export to desktop by default
+                // Show save file dialog
                 var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-                var filename = $"HyPrism-{branch}-v{version}_{DateTime.Now:yyyyMMdd_HHmmss}.zip";
-                var savePath = Path.Combine(desktop, filename);
+                var savePath = await fileDialog.SaveFileAsync(defaultFileName, "Zip files|*.zip", desktop);
+                
+                if (string.IsNullOrEmpty(savePath))
+                {
+                    // User cancelled
+                    Reply("hyprism:instance:export:reply", "");
+                    return;
+                }
+                
+                // Ensure .zip extension
+                if (!savePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                    savePath += ".zip";
 
                 // Create zip
                 if (File.Exists(savePath)) File.Delete(savePath);
@@ -622,43 +648,81 @@ public class IpcService
         {
             try
             {
-                // For now, return false - import should be triggered from frontend with file picker
-                Logger.Info("IPC", "Import triggered - frontend should use file picker");
-                Reply("hyprism:instance:import:reply", false);
-                return;
+                var fileDialog = _services.GetRequiredService<IFileDialogService>();
+                // Show file picker for zip files
+                var zipPath = await fileDialog.BrowseZipFileAsync();
                 
-                /* Commented out until we have proper file dialog
-                var zipPath = "";
+                if (string.IsNullOrEmpty(zipPath) || !File.Exists(zipPath))
+                {
+                    Logger.Info("IPC", "Import cancelled or file not found");
+                    Reply("hyprism:instance:import:reply", false);
+                    return;
+                }
+                
+                Logger.Info("IPC", $"Importing instance from: {zipPath}");
+                
                 // Extract to a temp location first to check structure
                 var tempDir = Path.Combine(Path.GetTempPath(), $"hyprism-import-{Guid.NewGuid()}");
                 Directory.CreateDirectory(tempDir);
                 
                 ZipFile.ExtractToDirectory(zipPath, tempDir, true);
                 
-                // Determine target path - check if zip has instance.json or similar metadata
-                var metaPath = Path.Combine(tempDir, "instance.json");
+                // Determine target path - check if zip has meta.json metadata
+                var metaPath = Path.Combine(tempDir, "meta.json");
                 var branch = "release";
                 var version = 0; // Latest
-                
+                string? existingId = null;
+
                 if (File.Exists(metaPath))
                 {
                     var meta = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(File.ReadAllText(metaPath), JsonOpts);
-                    branch = meta?["branch"].GetString() ?? "release";
+                    branch = meta?.TryGetValue("branch", out var b) == true ? b.GetString() ?? "release" : "release";
                     if (meta?.TryGetValue("version", out var v) == true) version = v.GetInt32();
+                    if (meta?.TryGetValue("id", out var idEl) == true) existingId = idEl.GetString();
                 }
                 
-                var targetPath = instanceService.GetInstancePath(branch, version);
+                // Check if instance with this ID already exists
+                var existingInstances = instanceService.GetInstalledInstances();
+                var idAlreadyExists = !string.IsNullOrEmpty(existingId) && 
+                    existingInstances.Any(i => i.Id == existingId);
                 
-                // Move from temp to target
-                if (Directory.Exists(targetPath))
+                // Generate new ID if existing one conflicts or doesn't exist
+                var newInstanceId = idAlreadyExists || string.IsNullOrEmpty(existingId) 
+                    ? Guid.NewGuid().ToString() 
+                    : existingId;
+                
+                var targetPath = instanceService.CreateInstanceDirectory(branch, newInstanceId);
+                
+                // Update meta.json with new ID if it was changed
+                if (File.Exists(metaPath) && (idAlreadyExists || string.IsNullOrEmpty(existingId)))
                 {
-                    Directory.Delete(targetPath, true);
+                    var metaContent = JsonSerializer.Deserialize<Dictionary<string, object>>(File.ReadAllText(metaPath), JsonOpts);
+                    if (metaContent != null)
+                    {
+                        metaContent["id"] = newInstanceId;
+                        File.WriteAllText(metaPath, JsonSerializer.Serialize(metaContent, JsonOpts));
+                        Logger.Info("IPC", $"Updated instance ID from '{existingId}' to '{newInstanceId}'");
+                    }
                 }
-                Directory.Move(tempDir, targetPath);
+                
+                // Move contents from temp to target
+                foreach (var file in Directory.GetFiles(tempDir))
+                {
+                    var destFile = Path.Combine(targetPath, Path.GetFileName(file));
+                    File.Move(file, destFile, true);
+                }
+                foreach (var dir in Directory.GetDirectories(tempDir))
+                {
+                    var destDir = Path.Combine(targetPath, Path.GetFileName(dir));
+                    if (Directory.Exists(destDir)) Directory.Delete(destDir, true);
+                    Directory.Move(dir, destDir);
+                }
+                
+                // Clean up temp directory
+                try { Directory.Delete(tempDir, true); } catch { /* ignore */ }
                 
                 Logger.Success("IPC", $"Imported instance to: {targetPath}");
                 Reply("hyprism:instance:import:reply", true);
-                */
             }
             catch (Exception ex)
             {
@@ -751,10 +815,20 @@ public class IpcService
             {
                 var json = ArgsToJson(args);
                 var data = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, JsonOpts);
-                var branch = data?["branch"].GetString() ?? "release";
-                var version = data?["version"].GetInt32() ?? 0;
+                var instanceId = data?["instanceId"].GetString();
                 
-                var instancePath = instanceService.GetInstancePath(branch, version);
+                if (string.IsNullOrEmpty(instanceId))
+                {
+                    Reply("hyprism:instance:getIcon:reply", null);
+                    return;
+                }
+                
+                var instancePath = instanceService.GetInstancePathById(instanceId);
+                if (string.IsNullOrEmpty(instancePath) || !Directory.Exists(instancePath))
+                {
+                    Reply("hyprism:instance:getIcon:reply", null);
+                    return;
+                }
                 
                 // Check for logo.png first (new format), then icon.png (legacy)
                 var logoPath = Path.Combine(instancePath, "logo.png");
@@ -1079,6 +1153,7 @@ public class IpcService
     private void RegisterSettingsHandlers()
     {
         var settings = _services.GetRequiredService<ISettingsService>();
+        var appPath = _services.GetRequiredService<AppPathConfiguration>();
 
         Electron.IpcMain.On("hyprism:settings:get", (_) =>
         {
@@ -1099,7 +1174,8 @@ public class IpcService
                 hasCompletedOnboarding = settings.GetHasCompletedOnboarding(),
                 onlineMode = settings.GetOnlineMode(),
                 authDomain = settings.GetAuthDomain(),
-                dataDirectory = settings.GetLauncherDataDirectory(),
+                dataDirectory = appPath.AppDir,
+                instanceDirectory = settings.GetInstanceDirectory(),
                 gpuPreference = settings.GetGpuPreference(),
                 launcherVersion = UpdateService.GetCurrentVersion()
             });
@@ -1187,6 +1263,7 @@ public class IpcService
     // @ipc send hyprism:window:minimize
     // @ipc send hyprism:window:maximize
     // @ipc send hyprism:window:close
+    // @ipc send hyprism:window:restart
     // @ipc send hyprism:browser:open
 
     private void RegisterWindowHandlers()
@@ -1202,6 +1279,19 @@ public class IpcService
         });
 
         Electron.IpcMain.On("hyprism:window:close", (_) => GetMainWindow()?.Close());
+
+        Electron.IpcMain.On("hyprism:window:restart", (_) =>
+        {
+            try
+            {
+                Electron.App.Exit();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("IPC", $"Failed to restart app: {ex.Message}");
+                GetMainWindow()?.Close();
+            }
+        });
 
         Electron.IpcMain.On("hyprism:browser:open", (args) =>
         {
@@ -1657,6 +1747,7 @@ public class IpcService
     // @ipc invoke hyprism:mods:importList -> number
     // @ipc invoke hyprism:settings:launcherPath -> string
     // @ipc invoke hyprism:settings:defaultInstanceDir -> string
+    // @ipc invoke hyprism:settings:setInstanceDir -> { success: boolean, path: string, noop?: boolean, reason?: string, error?: string } 300000
 
     private void RegisterFileDialogHandlers()
     {
@@ -1837,43 +1928,205 @@ public class IpcService
         // Get default instance directory
         Electron.IpcMain.On("hyprism:settings:defaultInstanceDir", (_) =>
         {
-            var defaultDir = Path.Combine(appPath.AppDir, "game");
+            var defaultDir = Path.Combine(appPath.AppDir, "Instances");
             Reply("hyprism:settings:defaultInstanceDir:reply", defaultDir);
         });
         
-        // Set instance directory
+        // Set instance directory - moves all instances to new location
         Electron.IpcMain.On("hyprism:settings:setInstanceDir", async (args) =>
         {
             try
             {
+                var progressService = _services.GetRequiredService<ProgressNotificationService>();
                 var path = ArgsToString(args);
-                var result = await config.SetInstanceDirectoryAsync(path);
-                Reply("hyprism:settings:setInstanceDir:reply", new { success = result != null, path = result ?? "" });
+                Logger.Info("IPC", $"Setting instance directory to: {path}");
+                var resetToDefault = string.IsNullOrWhiteSpace(path);
+                
+                // Expand and validate path - escape special characters
+                var newPath = resetToDefault
+                    ? Path.Combine(appPath.AppDir, "Instances")
+                    : Environment.ExpandEnvironmentVariables(path.Trim());
+
+                if (!Path.IsPathRooted(newPath))
+                {
+                    newPath = Path.GetFullPath(Path.Combine(appPath.AppDir, newPath));
+                }
+                else
+                {
+                    newPath = Path.GetFullPath(newPath);
+                }
+                
+                // Get current instance root
+                var currentRoot = Path.GetFullPath(instanceService.GetInstanceRoot());
+                
+                // If same directory, just update config
+                if (Path.GetFullPath(currentRoot).Equals(Path.GetFullPath(newPath), StringComparison.OrdinalIgnoreCase))
+                {
+                    Logger.Info("IPC", "New instance directory is same as current, skipping move");
+                    Reply("hyprism:settings:setInstanceDir:reply", new { success = true, path = newPath, noop = true, reason = "already-current-path" });
+                    return;
+                }
+
+                // Prevent recursive move into current directory subtree
+                if (newPath.StartsWith(currentRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    Reply("hyprism:settings:setInstanceDir:reply", new { success = false, path = "", error = "Target directory cannot be inside current instance directory" });
+                    return;
+                }
+                
+                // Create target directory
+                Directory.CreateDirectory(newPath);
+                
+                // Get all files to move
+                var filesToMove = new List<(string source, string dest)>();
+                if (Directory.Exists(currentRoot))
+                {
+                    await Task.Run(() => CollectFilesRecursive(currentRoot, newPath, currentRoot, filesToMove));
+                }
+
+                // Move larger files first to avoid late progress jumps and stale filename display
+                filesToMove = filesToMove
+                    .OrderByDescending(f =>
+                    {
+                        try { return new FileInfo(f.source).Length; }
+                        catch { return 0; }
+                    })
+                    .ToList();
+                
+                if (filesToMove.Count == 0)
+                {
+                    // No files to move, just update config
+                    if (resetToDefault)
+                    {
+                        var cfg = config.Configuration;
+                        cfg.InstanceDirectory = string.Empty;
+                        config.SaveConfig();
+                        Reply("hyprism:settings:setInstanceDir:reply", new { success = true, path = newPath });
+                    }
+                    else
+                    {
+                        var result = await config.SetInstanceDirectoryAsync(newPath);
+                        Reply("hyprism:settings:setInstanceDir:reply", new { success = result != null, path = result ?? newPath });
+                    }
+                    return;
+                }
+                
+                // Move files with progress
+                long totalSize = 0;
+                long movedSize = 0;
+                foreach (var (source, _) in filesToMove)
+                {
+                    try { totalSize += new FileInfo(source).Length; } catch { /* ignore */ }
+                }
+                
+                progressService.SendProgress("moving-instances", 0, "settings.dataSettings.movingData", null, 0, totalSize);
+                
+                var movedCount = 0;
+                foreach (var (source, dest) in filesToMove)
+                {
+                    try
+                    {
+                        var destDir = Path.GetDirectoryName(dest);
+                        if (!string.IsNullOrEmpty(destDir))
+                            Directory.CreateDirectory(destDir);
+
+                        var preProgress = totalSize > 0
+                            ? (int)Math.Clamp((movedSize * 100) / totalSize, 0, 99)
+                            : (movedCount * 100 / filesToMove.Count);
+                        progressService.SendProgress("moving-instances", preProgress, "settings.dataSettings.movingDataHint", new object[] { Path.GetFileName(source) }, movedSize, totalSize);
+                        
+                        // Copy file (safer than move across volumes)
+                        File.Copy(source, dest, true);
+                        
+                        var fileSize = new FileInfo(dest).Length;
+                        movedSize += fileSize;
+                        movedCount++;
+                        
+                        var progress = totalSize > 0 ? (int)((movedSize * 100) / totalSize) : (movedCount * 100 / filesToMove.Count);
+                        progressService.SendProgress("moving-instances", progress, "settings.dataSettings.movingDataHint", new object[] { Path.GetFileName(source) }, movedSize, totalSize);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warning("IPC", $"Failed to copy file {source}: {ex.Message}");
+                    }
+                }
+                
+                // Update config first
+                bool setSuccess;
+                if (resetToDefault)
+                {
+                    var cfg = config.Configuration;
+                    cfg.InstanceDirectory = string.Empty;
+                    config.SaveConfig();
+                    setSuccess = true;
+                }
+                else
+                {
+                    var setResultPath = await config.SetInstanceDirectoryAsync(newPath);
+                    setSuccess = setResultPath != null;
+                }
+                
+                // Delete old files only if config update succeeded
+                if (setSuccess)
+                {
+                    try
+                    {
+                        // Delete old directory contents (not the directory itself if it's app dir)
+                        if (!currentRoot.Equals(Path.Combine(appPath.AppDir, "Instances"), StringComparison.OrdinalIgnoreCase))
+                        {
+                            Directory.Delete(currentRoot, true);
+                        }
+                        else
+                        {
+                            // Just delete contents for default location
+                            foreach (var dir in Directory.GetDirectories(currentRoot))
+                                Directory.Delete(dir, true);
+                            foreach (var file in Directory.GetFiles(currentRoot))
+                                File.Delete(file);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warning("IPC", $"Failed to clean up old instance directory: {ex.Message}");
+                    }
+                }
+                
+                progressService.SendProgress("moving-instances-complete", 100, "settings.dataSettings.moveComplete", null, totalSize, totalSize);
+                Logger.Success("IPC", $"Instance directory moved to: {newPath}");
+                Reply("hyprism:settings:setInstanceDir:reply", new { success = setSuccess, path = newPath });
             }
             catch (Exception ex)
             {
                 Logger.Error("IPC", $"Failed to set instance directory: {ex.Message}");
-                Reply("hyprism:settings:setInstanceDir:reply", new { success = false, path = "" });
+                Reply("hyprism:settings:setInstanceDir:reply", new { success = false, path = "", error = ex.Message });
             }
         });
         
-        // Set launcher data directory (in config)
-        Electron.IpcMain.On("hyprism:settings:setLauncherDataDir", (args) =>
+    }
+
+    /// <summary>
+    /// Recursively collects all files from source directory for moving to destination.
+    /// </summary>
+    private static void CollectFilesRecursive(string sourceDir, string destRoot, string originalRoot, List<(string source, string dest)> files)
+    {
+        try
         {
-            try
+            foreach (var file in Directory.GetFiles(sourceDir))
             {
-                var path = ArgsToString(args);
-                var cfg = config.Configuration;
-                cfg.LauncherDataDirectory = path;
-                config.SaveConfig();
-                Reply("hyprism:settings:setLauncherDataDir:reply", new { success = true });
+                var relativePath = Path.GetRelativePath(originalRoot, file);
+                var destPath = Path.Combine(destRoot, relativePath);
+                files.Add((file, destPath));
             }
-            catch (Exception ex)
+            
+            foreach (var dir in Directory.GetDirectories(sourceDir))
             {
-                Logger.Error("IPC", $"Failed to set launcher data directory: {ex.Message}");
-                Reply("hyprism:settings:setLauncherDataDir:reply", new { success = false, error = ex.Message });
+                CollectFilesRecursive(dir, destRoot, originalRoot, files);
             }
-        });
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("IPC", $"Failed to enumerate directory {sourceDir}: {ex.Message}");
+        }
     }
 
     // #endregion

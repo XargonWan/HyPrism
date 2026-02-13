@@ -226,12 +226,11 @@
       "launcherDataFolder": "Launcher-Datenordner",
       "open": "Öffnen",
       "resetToDefault": "Auf Standard zurücksetzen",
-      "changesAfterRestart": "Änderungen nach Neustart wirksam.",
       "openLauncherFolder": "Launcher-Ordner öffnen",
       "deleteAllData": "Alle Launcher-Daten löschen",
-      "cleanData": "Daten bereinigen",
-      "cleanDataHint": "Temporäre Dateien und Caches entfernen, um Platz zu schaffen.",
-      "cleanDataAction": "Temporäre Dateien bereinigen"
+      "gameRunningWarning": "Einige Optionen sind nicht verfügbar, während das Spiel läuft. Bitte schließen Sie das Spiel, um diese Einstellungen zu ändern.",
+      "movingData": "Verschiebe Daten...",
+      "movingDataHint": "Verschieben: {{file}}"
     },
     "instanceSettings": {
       "title": "Instanzverwaltung",
