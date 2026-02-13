@@ -1,4 +1,4 @@
-name: Build HyPrism
+name: Release HyPrism
 
 on:
   push:
@@ -7,591 +7,201 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Override version tag - Version will be inferred from app.manifest or git tag if not provided'
+        description: 'Version override (e.g., 3.0.0). Leave empty to use version from HyPrism.csproj'
         required: false
         default: ''
-      do_release:
-        description: 'Set to true to create the GitHub Release'
-        required: false
-        default: false
-        type: boolean
       prerelease:
-        description: 'Set to true to mark the GitHub Release as prerelease'
+        description: 'Mark as prerelease'
         required: false
         default: true
         type: boolean
 
-env:
-  DOTNET_VERSION: '8.0.x'
-  NODE_VERSION: '20'
-
 jobs:
-  generate-linux-bundle:
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
+  # ============================================================================
+  # Call the build workflow
+  # ============================================================================
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      platforms: 'all'
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Determine version for Linux packages
-        run: |
-          set -euo pipefail
-          if [ ! -f app.manifest ]; then
-            echo "ERROR: app.manifest not found"
-            exit 1
-          fi
-          RAW=$(grep -oP 'assemblyIdentity\s+[^>]*version="\K[^"]+' app.manifest || true)
-          if [ -z "$RAW" ]; then
-            echo "ERROR: could not parse version from app.manifest"
-            exit 1
-          fi
-          IFS=. read -r MAJOR MINOR PATCH REST <<<"$RAW"
-          PATCH=${PATCH:-0}
-          VERSION="$MAJOR.$MINOR.$PATCH"
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            echo "::warning::Version overridden by workflow input (discouraged). Prefer updating app.manifest to keep it authoritative."
-            VERSION="${{ github.event.inputs.version }}"
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-      - name: Generate Linux bundle via script
-        run: |
-          ./Scripts/build-linux.sh --auto-install-deps --only-bundle
-
-      - name: Normalize Linux tarballs
-        run: |
-          set -euo pipefail
-          if [ -f artifacts/HyPrism-linux-x64-portable.tar.gz ] && [ ! -f artifacts/HyPrism-linux-x64.tar.gz ]; then
-            mv artifacts/HyPrism-linux-x64-portable.tar.gz artifacts/HyPrism-linux-x64.tar.gz
-          fi
-          if [ -f artifacts/HyPrism-linux-arm64-portable.tar.gz ] && [ ! -f artifacts/HyPrism-linux-arm64.tar.gz ]; then
-            mv artifacts/HyPrism-linux-arm64-portable.tar.gz artifacts/HyPrism-linux-arm64.tar.gz
-          fi
-          ls -la artifacts | sed -n '1,200p'
-
-      - name: Upload Linux bundle artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-bundle
-          path: |
-            Packaging/flatpak/bundle/**
-            artifacts/linux-x64/portable/**
-            artifacts/HyPrism-linux-x64.tar.gz
-            artifacts/HyPrism-linux-arm64.tar.gz
-
-  package-appimage:
-    needs: generate-linux-bundle
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download Linux bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-bundle
-          path: .
-
-      - name: Install AppImage tool (if missing)
-        run: |
-          if ! command -v appimagetool >/dev/null 2>&1; then
-            sudo apt-get update -y
-            sudo apt-get install -y libfuse2 || true
-            curl -fsSL -o /tmp/appimagetool "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage"
-            chmod +x /tmp/appimagetool
-            sudo mv /tmp/appimagetool /usr/local/bin/appimagetool
-          fi
-
-      - name: Build AppImage via script
-        run: |
-          SKIP_BUILD=1 ./Scripts/build-linux.sh --auto-install-deps --only-appimage
-
-      - name: Upload AppImage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: appimage
-          path: artifacts/HyPrism-linux-x64.AppImage
-
-  package-flatpak:
-    needs: generate-linux-bundle
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download Linux bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-bundle
-          path: .
-
-      - name: Build Flatpak via script
-        run: |
-          SKIP_BUILD=1 ./Scripts/build-linux.sh --auto-install-deps --only-flatpak
-
-      - name: Upload Flatpak artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: flatpak
-          path: artifacts/HyPrism-linux-x64.flatpak
-          if-no-files-found: warn
-
-  package-deb-rpm:
-    needs: generate-linux-bundle
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download Linux bundle
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-bundle
-          path: .
-
-      - name: Determine version for Linux packages
-        run: |
-          set -euo pipefail
-          if [ ! -f app.manifest ]; then
-            echo "ERROR: app.manifest not found"
-            exit 1
-          fi
-          RAW=$(grep -oP 'assemblyIdentity\s+[^>]*version="\K[^"]+' app.manifest || true)
-          if [ -z "$RAW" ]; then
-            echo "ERROR: could not parse version from app.manifest"
-            exit 1
-          fi
-          IFS=. read -r MAJOR MINOR PATCH REST <<<"$RAW"
-          PATCH=${PATCH:-0}
-          VERSION="$MAJOR.$MINOR.$PATCH"
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            echo "::warning::Version overridden by workflow input (discouraged). Prefer updating app.manifest to keep it authoritative."
-            VERSION="${{ github.event.inputs.version }}"
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-      - name: Build deb/rpm via script
-        run: |
-          SKIP_BUILD=1 ./Scripts/build-linux.sh --auto-install-deps --only-deb-rpm
-
-      - name: Upload deb/rpm artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-packages
-          path: |
-            artifacts/HyPrism-linux-x64.deb
-            artifacts/HyPrism-linux-x64.rpm
-
-  build-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm ci
-          npm run build
-
-      - name: Build Windows x64
-        run: |
-          dotnet restore
-          dotnet publish ./HyPrism.csproj -c Release -r win-x64 --self-contained true `
-            /p:PublishSingleFile=true /p:PublishReadyToRun=true `
-            /p:IncludeNativeLibrariesForSelfExtract=true `
-            /p:IncludeAllContentForSelfExtract=true `
-            /p:OutputType=WinExe /p:ApplicationManifest=app.manifest `
-            /p:ApplicationIcon=Packaging/windows/HyPrism.ico `
-            -o artifacts/win-x64
-
-      - name: Rename Windows exe for release
-        run: |
-          # Rename to include version info for direct download
-          Copy-Item artifacts/win-x64/HyPrism.exe artifacts/HyPrism-windows-x64.exe
-
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-builds
-          path: artifacts/HyPrism-windows-x64.exe
-
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm ci
-          npm run build
-
-      - name: Build macOS arm64
-        run: |
-          dotnet publish ./HyPrism.csproj -c Release -r osx-arm64 --self-contained true \
-            -o artifacts/osx-arm64
-
-      - name: Create macOS app bundle (arm64 only)
-        run: |
-          set -e
-          
-          mkdir -p "artifacts/HyPrism.app/Contents/MacOS"
-          mkdir -p "artifacts/HyPrism.app/Contents/Resources"
-          
-          if [ ! -f "artifacts/osx-arm64/HyPrism" ]; then
-            echo "ERROR: HyPrism binary not found!"
-            ls -la artifacts/osx-arm64/ || true
-            exit 1
-          fi
-          
-          # Copy ALL files from publish output to MacOS folder (includes all .NET runtime files)
-          cp -R artifacts/osx-arm64/* "artifacts/HyPrism.app/Contents/MacOS/"
-          
-          # Move wwwroot and jre.json to Resources (app expects them in Resources or next to exe)
-          if [ -d "artifacts/HyPrism.app/Contents/MacOS/wwwroot" ]; then
-            cp -R "artifacts/HyPrism.app/Contents/MacOS/wwwroot" "artifacts/HyPrism.app/Contents/Resources/"
-          fi
-          if [ -f "artifacts/HyPrism.app/Contents/MacOS/jre.json" ]; then
-            cp "artifacts/HyPrism.app/Contents/MacOS/jre.json" "artifacts/HyPrism.app/Contents/Resources/"
-          fi
-          if [ -d "artifacts/HyPrism.app/Contents/MacOS/assets" ]; then
-            cp -R "artifacts/HyPrism.app/Contents/MacOS/assets" "artifacts/HyPrism.app/Contents/Resources/"
-          fi
-          
-          cp Packaging/macos/Info.plist "artifacts/HyPrism.app/Contents/"
-          cp Packaging/macos/HyPrism.icns "artifacts/HyPrism.app/Contents/Resources/"
-          chmod +x "artifacts/HyPrism.app/Contents/MacOS/HyPrism"
-          echo "APPL????" > "artifacts/HyPrism.app/Contents/PkgInfo"
-
-      - name: Create DMG (arm64 only)
-        run: |
-          set -e
-          
-          mkdir -p dmg
-          cp -R "artifacts/HyPrism.app" "dmg/HyPrism.app"
-          ln -s /Applications dmg/Applications
-          
-          # Create the "Fix Permissions" command file
-          cat > "dmg/Fix Permissions.command" << 'FIXSCRIPT'
-          #!/bin/bash
-          # This script removes quarantine attributes from HyPrism
-          # Run this if macOS says the app is damaged or can't be opened
-          
-          APP_PATH="$(dirname "$0")/HyPrism.app"
-          
-          echo "Removing quarantine attributes from HyPrism..."
-          xattr -cr "$APP_PATH"
-          
-          echo ""
-          echo "Done! You can now open HyPrism.app"
-          echo "Press any key to close this window..."
-          read -n 1
-          FIXSCRIPT
-          chmod +x "dmg/Fix Permissions.command"
-          
-          # Use specific background image
-          SELECTED_BG="packaging/macos/dmg-background.jpg"
-          
-          if [ -f "$SELECTED_BG" ]; then
-            echo "Using background: $(basename "$SELECTED_BG")"
-            mkdir -p dmg/.background
-            cp "$SELECTED_BG" "dmg/.background/background.jpg"
-          else
-            echo "Background image not found: $SELECTED_BG"
-          fi
-          
-          # Create temporary read-write DMG
-          hdiutil create -volname "HyPrism" -srcfolder dmg -ov -format UDRW -fs HFS+ temp.dmg
-          
-          # Mount and customize
-          MOUNT_POINT=$(hdiutil attach -readwrite -noverify -noautoopen temp.dmg | grep "/Volumes/HyPrism" | sed 's/.*\(\/Volumes\/.*\)/\1/')
-          
-          if [ -n "$MOUNT_POINT" ]; then
-            sleep 2
-            
-            # Set up DMG appearance with AppleScript
-            osascript <<'APPLESCRIPT'
-            tell application "Finder"
-              tell disk "HyPrism"
-                open
-                set current view of container window to icon view
-                set toolbar visible of container window to false
-                set statusbar visible of container window to false
-                set the bounds of container window to {400, 200, 1040, 680}
-                set viewOptions to the icon view options of container window
-                set arrangement of viewOptions to not arranged
-                set icon size of viewOptions to 128
-                set background picture of viewOptions to file ".background:background.jpg"
-                set position of item "HyPrism.app" of container window to {120, 220}
-                set position of item "Applications" of container window to {500, 220}
-                set position of item "Fix Permissions.command" of container window to {310, 400}
-                close
-                open
-                update without registering applications
-                delay 5
-              end tell
-            end tell
-            APPLESCRIPT
-            
-            sync
-            hdiutil detach "$MOUNT_POINT"
-          fi
-          
-          # Convert to compressed DMG
-          hdiutil convert temp.dmg -format UDZO -o artifacts/HyPrism-macos-arm64.dmg
-          rm -f temp.dmg
-
-      - name: Upload macOS artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-builds
-          path: artifacts/HyPrism-macos-arm64.dmg
-
+  # ============================================================================
+  # Create GitHub Release
+  # ============================================================================
   release:
-    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.do_release == 'true' && always() }}
-    needs: [package-appimage, package-flatpak, package-deb-rpm, build-windows, build-macos]
+    needs: [build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: Check build results (fail only if all failed)
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
         run: |
           set -euo pipefail
-          RESULTS=(
-            "${{ needs.package-appimage.result }}"
-            "${{ needs.package-flatpak.result }}"
-            "${{ needs.package-deb-rpm.result }}"
-            "${{ needs.build-windows.result }}"
-            "${{ needs.build-macos.result }}"
-          )
-
-          HAS_SUCCESS=false
-          for r in "${RESULTS[@]}"; do
-            if [ "$r" = "success" ]; then
-              HAS_SUCCESS=true
-              break
-            fi
-          done
-
-          if [ "$HAS_SUCCESS" = "false" ]; then
-            echo "ERROR: All builds failed or were canceled. Release blocked."
+          
+          # Try to get version from csproj
+          VERSION=$(grep -oP '<Version>\K[^<]+' HyPrism.csproj || echo "")
+          
+          # Override with input if provided
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            echo "::notice::Version overridden by workflow input: $VERSION"
+          fi
+          
+          # Fallback to tag if available
+          if [ -z "$VERSION" ] && [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          
+          if [ -z "$VERSION" ]; then
+            echo "ERROR: Could not determine version"
             exit 1
           fi
-
-      - name: Checkout repo
-        uses: actions/checkout@v4
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag_name=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
-        continue-on-error: true
         with:
           path: release-assets
           merge-multiple: true
 
-      - name: Ensure release-assets exists
-        run: |
-          mkdir -p release-assets
-
-      - name: Remove Flatpak repo metadata from release assets
-        run: |
-          set -euo pipefail
-          echo "Cleaning up unwanted metadata files from release-assets/"
-          find release-assets -type f \( -name 'summary' -o -name 'summary.idx' -o -name 'config' \) -print -exec rm -f {} + || true
-
       - name: List release assets
-        run: ls -la release-assets/ || true
-
-      - name: Determine version from app.manifest (default), optional input override, and tag consistency
-        id: determine_version
         run: |
-          set -euo pipefail
+          echo "=== Release Assets ==="
+          find release-assets -type f | head -50 || echo "No files found"
+          ls -laR release-assets/ || true
 
-          # --- Default: derive version from app.manifest (source of truth) ---
-          if [ ! -f app.manifest ]; then
-            echo "ERROR: app.manifest not found"
-            exit 1
-          fi
-          RAW=$(grep -oP 'assemblyIdentity\s+[^>]*version="\K[^"]+' app.manifest || true)
-          if [ -z "$RAW" ]; then
-            echo "ERROR: could not parse version from app.manifest"
-            exit 1
-          fi
-          IFS=. read -r MAJOR MINOR PATCH REST <<<"$RAW"
-          PATCH=${PATCH:-0}
-          VERSION="$MAJOR.$MINOR.$PATCH"
-
-          # --- Optional override by workflow input (discouraged) ---
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            echo "::warning::Version overridden by workflow input (discouraged). Prefer updating app.manifest to keep it authoritative."
-            VERSION="${{ github.event.inputs.version }}"
-          fi
-
-          # --- Tag consistency: only enforce when run is for a tag (refs/tags/*) ---
-          if [[ "${GITHUB_REF:-}" == refs/tags/* ]]; then
-            TAG_NAME="${GITHUB_REF#refs/tags/}"
-            if [ "${TAG_NAME}" != "v$VERSION" ]; then
-              echo "ERROR: Tag '${TAG_NAME}' does not match version '${VERSION}' (derived from app.manifest or override)."
-              echo "Please tag as v$VERSION or provide the correct version via workflow input."
-              exit 1
-            fi
-          else
-            TAG_NAME="v$VERSION"
-          fi
-
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
-
-      - name: Create version.json for auto-updater
+      - name: Flatten release assets
         run: |
-          VERSION="${{ steps.determine_version.outputs.version }}"
-          TAG_NAME="v${{ steps.determine_version.outputs.version }}"
+          mkdir -p final-assets
+          find release-assets -type f \( \
+            -name "*.AppImage" -o \
+            -name "*.deb" -o \
+            -name "*.rpm" -o \
+            -name "*.tar.xz" -o \
+            -name "*.dmg" -o \
+            -name "*.zip" -o \
+            -name "*.exe" \
+          \) -exec cp {} final-assets/ \;
+          echo "=== Final Assets ==="
+          ls -la final-assets/
 
-          cat > release-assets/version.json << EOF
+      - name: Generate version.json for auto-updater
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="${{ steps.version.outputs.tag_name }}"
+          REPO="${GITHUB_REPOSITORY}"
+          
+          cat > final-assets/version.json << EOF
           {
             "version": "$VERSION",
-            "linux": {
-              "amd64": {
-                "launcher": {
-                  "url": "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG_NAME/HyPrism-linux-x64.AppImage",
-                  "sha256": ""
+            "releaseDate": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "platforms": {
+              "linux": {
+                "x64": {
+                  "appimage": "https://github.com/$REPO/releases/download/$TAG/HyPrism-linux-x64-$VERSION.AppImage",
+                  "deb": "https://github.com/$REPO/releases/download/$TAG/HyPrism-linux-x64-$VERSION.deb",
+                  "rpm": "https://github.com/$REPO/releases/download/$TAG/HyPrism-linux-x64-$VERSION.rpm",
+                  "tar": "https://github.com/$REPO/releases/download/$TAG/HyPrism-linux-x64-$VERSION.tar.xz"
                 },
-                "tarball": {
-                  "url": "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG_NAME/HyPrism-linux-x64.tar.gz",
-                  "sha256": ""
+                "arm64": {
+                  "appimage": "https://github.com/$REPO/releases/download/$TAG/HyPrism-linux-arm64-$VERSION.AppImage",
+                  "deb": "https://github.com/$REPO/releases/download/$TAG/HyPrism-linux-arm64-$VERSION.deb",
+                  "rpm": "https://github.com/$REPO/releases/download/$TAG/HyPrism-linux-arm64-$VERSION.rpm",
+                  "tar": "https://github.com/$REPO/releases/download/$TAG/HyPrism-linux-arm64-$VERSION.tar.xz"
                 }
               },
-              "arm64": {
-                "launcher": {
-                  "url": "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG_NAME/HyPrism-linux-arm64.tar.gz",
-                  "sha256": ""
-                },
-                "tarball": {
-                  "url": "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG_NAME/HyPrism-linux-arm64.tar.gz",
-                  "sha256": ""
+              "windows": {
+                "x64": {
+                  "zip": "https://github.com/$REPO/releases/download/$TAG/HyPrism-win-x64-$VERSION.zip"
                 }
-              }
-            },
-            "windows": {
-              "amd64": {
-                "launcher": {
-                  "url": "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG_NAME/HyPrism-windows-x64.exe",
-                  "sha256": ""
-                }
-              }
-            },
-            "darwin": {
-              "arm64": {
-                "launcher": {
-                  "url": "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG_NAME/HyPrism-macos-arm64.dmg",
-                  "sha256": ""
+              },
+              "macos": {
+                "arm64": {
+                  "dmg": "https://github.com/$REPO/releases/download/$TAG/HyPrism-mac-arm64-$VERSION.dmg"
                 }
               }
             }
           }
           EOF
 
-      - name: Validate release tag
+      - name: Detect missing builds
+        id: build_status
         run: |
           set -euo pipefail
-          TAG_NAME="v${{ steps.determine_version.outputs.version }}"
-          if [ -z "$TAG_NAME" ] || [ "$TAG_NAME" = "main" ]; then
-            echo "ERROR: Invalid release tag: '$TAG_NAME'" >&2
-            exit 1
+          
+          WARNINGS=""
+          
+          # Check what files we actually have
+          if ! ls final-assets/*linux*x64* >/dev/null 2>&1; then
+            WARNINGS="${WARNINGS}- Linux x64 build\n"
           fi
-
-      - name: Detect missing release artifacts
-        id: detect_missing
-        run: |
-          set -euo pipefail
-          EXPECTED=(
-            "HyPrism-linux-x64.deb"
-            "HyPrism-linux-x64.rpm"
-            "HyPrism-linux-x64.AppImage"
-            "HyPrism.flatpak"
-            "HyPrism-windows-x64.exe"
-            "HyPrism-macos-arm64.dmg"
-          )
-
-          MISSING=()
-          for f in "${EXPECTED[@]}"; do
-            if [ ! -f "release-assets/$f" ]; then
-              MISSING+=("$f")
-            fi
-          done
-
-          if [ ${#MISSING[@]} -gt 0 ]; then
-            {
-              echo "warning_block<<EOF"
-              echo "### ⚠️ Build warnings"
-              echo "The following builds were not published because they failed:"
-              for m in "${MISSING[@]}"; do
-                echo "- $m"
-              done
-              echo ""
-              echo "EOF"
-            } >> "$GITHUB_OUTPUT"
+          if ! ls final-assets/*linux*arm64* >/dev/null 2>&1; then
+            WARNINGS="${WARNINGS}- Linux ARM64 build\n"
+          fi
+          if ! ls final-assets/*win* >/dev/null 2>&1; then
+            WARNINGS="${WARNINGS}- Windows x64 build\n"
+          fi
+          if ! ls final-assets/*mac* >/dev/null 2>&1; then
+            WARNINGS="${WARNINGS}- macOS ARM64 build\n"
+          fi
+          
+          if [ -n "$WARNINGS" ]; then
+            echo "warnings<<EOF" >> $GITHUB_OUTPUT
+            echo "### ⚠️ Missing Builds" >> $GITHUB_OUTPUT
+            echo "The following builds are not included in this release:" >> $GITHUB_OUTPUT
+            echo -e "$WARNINGS" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
           else
-            echo "warning_block=" >> "$GITHUB_OUTPUT"
+            echo "warnings=" >> $GITHUB_OUTPUT
           fi
 
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
-          tag: v${{ steps.determine_version.outputs.version }}
-          name: HyPrism v${{ steps.determine_version.outputs.version }}
+          tag: ${{ steps.version.outputs.tag_name }}
+          name: HyPrism ${{ steps.version.outputs.tag_name }}
           body: |
-            ## HyPrism v${{ steps.determine_version.outputs.version }}
-
-            ${{ steps.detect_missing.outputs.warning_block }}
+            ## HyPrism ${{ steps.version.outputs.tag_name }}
             
-            ### Downloads
+            ${{ steps.build_status.outputs.warnings }}
             
-            **Windows**
-            - `HyPrism-windows-x64.zip` - Windows 64-bit
+            ### 📥 Downloads
             
-            **macOS**
-            - `HyPrism-macos-arm64.dmg` - macOS Apple Silicon
+            | Platform | Architecture | Format | Download |
+            |----------|-------------|--------|----------|
+            | **Windows** | x64 | Portable ZIP | `HyPrism-win-x64-${{ steps.version.outputs.version }}.zip` |
+            | **macOS** | ARM64 (Apple Silicon) | DMG | `HyPrism-mac-arm64-${{ steps.version.outputs.version }}.dmg` |
+            | **Linux** | x64 | AppImage | `HyPrism-linux-x64-${{ steps.version.outputs.version }}.AppImage` |
+            | **Linux** | x64 | DEB | `HyPrism-linux-x64-${{ steps.version.outputs.version }}.deb` |
+            | **Linux** | x64 | RPM | `HyPrism-linux-x64-${{ steps.version.outputs.version }}.rpm` |
+            | **Linux** | x64 | tar.xz | `HyPrism-linux-x64-${{ steps.version.outputs.version }}.tar.xz` |
+            | **Linux** | ARM64 | AppImage | `HyPrism-linux-arm64-${{ steps.version.outputs.version }}.AppImage` |
+            | **Linux** | ARM64 | DEB | `HyPrism-linux-arm64-${{ steps.version.outputs.version }}.deb` |
+            | **Linux** | ARM64 | RPM | `HyPrism-linux-arm64-${{ steps.version.outputs.version }}.rpm` |
+            | **Linux** | ARM64 | tar.xz | `HyPrism-linux-arm64-${{ steps.version.outputs.version }}.tar.xz` |
             
-            **Linux - Modern (Ubuntu 22.04+, Debian 11+, Fedora 36+)**
-            - `HyPrism-linux-x64.tar.gz` - Linux 64-bit portable (webkit2gtk-4.1)
-            - `HyPrism-linux-arm64.tar.gz` - Linux ARM64 portable (webkit2gtk-4.1)
-            - `HyPrism-linux-x64.deb` - Debian/Ubuntu package (webkit2gtk-4.1)
-            - `HyPrism-linux-x64.rpm` - Fedora/RHEL package (webkit2gtk-4.1)
-            - `HyPrism-linux-x64.AppImage` - Universal Linux AppImage (webkit2gtk-4.1)
+            ### 🖥️ System Requirements
             
-            ### Important Notes
+            | OS | Supported Architectures |
+            |----|------------------------|
+            | Windows 10/11 | x64 |
+            | Linux | x64, ARM64 |
+            | macOS | ARM64 (Apple Silicon) |
             
-            **Older Linux systems**: on some older distros only the Flatpak may work.
+            > ⚠️ **Note**: Windows ARM64 and macOS Intel (x86_64) are **not supported**.
             
-            ### Changes
-            - Updated to support webkit2gtk-4.1
+            ### 📝 Changes
+            
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
           draft: false
-          prerelease: ${{ github.event.inputs.prerelease }}
-          artifacts: release-assets/*
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+          artifacts: final-assets/*
           allowUpdates: true
           replacesArtifacts: true

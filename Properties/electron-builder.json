@@ -6,13 +6,16 @@
     "target": ["tar.xz"],
     "executableArgs": ["--no-sandbox"],
     "category": "Game",
-    "maintainer": "HyPrism <idkwhatisyumemail@example.com>"
+    "icon": "Packaging/flatpak/dev.hyprism.HyPrism.png",
+    "maintainer": "HyPrism Team <noreply@example.com>"
   },
   "win": {
-    "target": ["zip"]
+    "target": ["zip"],
+    "icon": "Packaging/windows/HyPrism.ico"
   },
   "mac": {
     "target": ["dmg"],
-    "category": "public.app-category.games"
+    "category": "public.app-category.games",
+    "icon": "Packaging/macos/hyprism-macos.icns"
   }
 }

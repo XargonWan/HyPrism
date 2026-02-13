@@ -22,7 +22,10 @@
 #
 # Options:
 #   --arch <arch>   Build only for specific architecture (x64 or arm64)
-#                   Default: build for both x64 and arm64
+#                   Note: Not all arches are valid for all platforms
+#                   - Windows: x64 only
+#                   - Linux: x64 and arm64
+#                   - macOS: arm64 only (Apple Silicon)
 #
 # Platform restrictions (enforced by Electron.NET):
 #   Linux targets  → must build on Linux
@@ -115,11 +118,40 @@ FAIL_COUNT=0
 SKIP_COUNT=0
 
 # ─── Determine architectures to build ────────────────────────────────────────
+# Platform restrictions:
+#   - Windows: x64 only
+#   - Linux: x64 and arm64
+#   - macOS: arm64 only (Apple Silicon)
 get_arches() {
+    local platform="$1"
+    local arches=""
+
+    case "$platform" in
+        win)
+            arches="x64"
+            ;;
+        linux)
+            arches="x64 arm64"
+            ;;
+        mac)
+            arches="arm64"
+            ;;
+        *)
+            arches="x64"
+            ;;
+    esac
+
+    # Apply user filter if specified
     if [[ -n "$ARCH_FILTER" ]]; then
-        echo "$ARCH_FILTER"
+        # Only return the arch if it's in the allowed list for the platform
+        if [[ " $arches " == *" $ARCH_FILTER "* ]]; then
+            echo "$ARCH_FILTER"
+        else
+            log_warn "Arch '$ARCH_FILTER' not supported for $platform (allowed: $arches)"
+            echo ""
+        fi
     else
-        echo "x64 arm64"
+        echo "$arches"
     fi
 }
 
@@ -170,7 +202,8 @@ write_config() {
     "target": TARGETS_PLACEHOLDER,
     "executableArgs": ["--no-sandbox"],
     "category": "Game",
-    "maintainer": "HyPrism <idkwhatisyumemail@example.com>"
+    "icon": "Packaging/flatpak/dev.hyprism.HyPrism.png",
+    "maintainer": "HyPrism Team"
   }
 INNER
 )
@@ -178,7 +211,8 @@ INNER
         win)
             platform_block=$(cat <<'INNER'
   "win": {
-    "target": TARGETS_PLACEHOLDER
+    "target": TARGETS_PLACEHOLDER,
+    "icon": "Packaging/windows/HyPrism.ico"
   }
 INNER
 )
@@ -187,7 +221,8 @@ INNER
             platform_block=$(cat <<'INNER'
   "mac": {
     "target": TARGETS_PLACEHOLDER,
-    "category": "public.app-category.games"
+    "category": "public.app-category.games",
+    "icon": "Packaging/macos/hyprism-macos.icns"
   }
 INNER
 )
@@ -295,7 +330,15 @@ build_platform() {
     log_section "$label"
     write_config "$platform" "$targets_json"
 
-    for arch in $(get_arches); do
+    local arches
+    arches=$(get_arches "$platform")
+    if [[ -z "$arches" ]]; then
+        log_warn "No valid architectures for $platform"
+        SKIP_COUNT=$((SKIP_COUNT + 1))
+        return 0
+    fi
+
+    for arch in $arches; do
         local rid
         rid=$(get_rid "$platform" "$arch")
         do_publish "$rid" "$label [$arch]"
