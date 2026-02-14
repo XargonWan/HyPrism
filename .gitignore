@@ -25,7 +25,7 @@ Build/icons/*
 .vscode/
 
 # Frontend Build outputs
-[Pp]ackaging/flatpak/bundle
+packaging-build
 wwwroot/
 node_modules/
 
