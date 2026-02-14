@@ -1,5 +1,8 @@
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Runtime.InteropServices;
+using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using HyPrism.Models;
 using HyPrism.Services.Core.Infrastructure;
@@ -147,7 +150,8 @@ public class GameLauncher : IGameLauncher
 
         Logger.Info("Game", $"Using UUID for user '{_config.Nick}': {sessionUuid}");
 
-        var (identityToken, sessionToken) = await AuthenticateAsync(sessionUuid);
+        var (identityToken, sessionToken, authPlayerName) = await AuthenticateAsync(sessionUuid);
+        string launchPlayerName = ResolveLaunchPlayerName(authPlayerName, identityToken);
 
         string javaPath = _launchService.GetJavaPath();
         if (!File.Exists(javaPath)) throw new Exception($"Java not found at {javaPath}");
@@ -155,11 +159,13 @@ public class GameLauncher : IGameLauncher
         string userDataDir = _instanceService.GetInstanceUserDataPath(versionPath);
         Directory.CreateDirectory(userDataDir);
 
+        QuarantineIncompatibleServerMods(userDataDir);
+
         RestoreProfileSkinData(sessionUuid, userDataDir);
 
-        LogLaunchInfo(executable, javaPath, versionPath, userDataDir, sessionUuid);
+        LogLaunchInfo(executable, javaPath, versionPath, userDataDir, sessionUuid, launchPlayerName);
 
-        var startInfo = BuildProcessStartInfo(executable, workingDir, versionPath, userDataDir, javaPath, sessionUuid, identityToken, sessionToken);
+        var startInfo = BuildProcessStartInfo(executable, workingDir, versionPath, userDataDir, javaPath, sessionUuid, identityToken, sessionToken, launchPlayerName);
 
         ct.ThrowIfCancellationRequested();
 
@@ -263,7 +269,14 @@ public class GameLauncher : IGameLauncher
 
             var patcher = new ClientPatcher(baseDomain);
 
-            var patchResult = patcher.EnsureClientPatched(versionPath, (msg, progress) =>
+            // Patch both client binary AND server JAR.
+            // Client binary: replaces hytale.com domain references in the native binary.
+            // Server JAR: replaces sessions.hytale.com in class files so the embedded
+            //   server validates tokens against the custom auth server (e.g. sanasol.ws).
+            // JAVA_TOOL_OPTIONS / DualAuth cannot be used for the server because
+            // HytaleClient sanitises the child-process environment, so the env var
+            // never reaches the server's JVM.
+            var patchResult = patcher.EnsureAllPatched(versionPath, (msg, progress) =>
             {
                 Logger.Info("Patcher", progress.HasValue ? $"{msg} ({progress}%)" : msg);
                 if (progress.HasValue)
@@ -273,8 +286,7 @@ public class GameLauncher : IGameLauncher
                 }
             });
 
-            // Use DualAuth agent instead of server JAR patching
-            // DualAuth transforms bytecode at runtime, avoiding permanent JAR modifications
+            // DualAuth agent is still set up as a fallback / for future use.
             Logger.Info("Game", $"Setting up DualAuth agent for auth domain: {baseDomain}");
             _progressService.ReportDownloadProgress("patching", 65, "launch.detail.dualauth_setup", null, 0, 0);
 
@@ -336,10 +348,11 @@ public class GameLauncher : IGameLauncher
         }
     }
 
-    private async Task<(string? identityToken, string? sessionToken)> AuthenticateAsync(string sessionUuid)
+    private async Task<(string? identityToken, string? sessionToken, string? authPlayerName)> AuthenticateAsync(string sessionUuid)
     {
         string? identityToken = null;
         string? sessionToken = null;
+        string? authPlayerName = null;
 
         // Check if the active profile is an official Hytale account
         var currentProfile = _config.Profiles?.FirstOrDefault(p => p.UUID == sessionUuid);
@@ -382,12 +395,12 @@ public class GameLauncher : IGameLauncher
                 throw;
             }
 
-            return (identityToken, sessionToken);
+            return (identityToken, sessionToken, authPlayerName);
         }
 
         // Non-official profile — use custom auth domain if configured
         if (!_config.OnlineMode || string.IsNullOrWhiteSpace(_config.AuthDomain))
-            return (identityToken, sessionToken);
+            return (identityToken, sessionToken, authPlayerName);
 
         _progressService.ReportDownloadProgress("launching", 20, "launch.detail.authenticating", [_config.AuthDomain], 0, 0);
         Logger.Info("Game", $"Online mode enabled - fetching auth tokens from {_config.AuthDomain}...");
@@ -401,6 +414,7 @@ public class GameLauncher : IGameLauncher
             {
                 identityToken = tokenResult.Token;
                 sessionToken = tokenResult.SessionToken ?? tokenResult.Token;
+                authPlayerName = tokenResult.Name;
                 Logger.Success("Game", "Identity token obtained successfully");
             }
             else
@@ -413,7 +427,66 @@ public class GameLauncher : IGameLauncher
             Logger.Error("Game", $"Error fetching auth token: {ex.Message}");
         }
 
-        return (identityToken, sessionToken);
+        return (identityToken, sessionToken, authPlayerName);
+    }
+
+    private string ResolveLaunchPlayerName(string? authPlayerName, string? identityToken)
+    {
+        string? tokenPlayerName = TryExtractPlayerNameFromJwt(identityToken);
+
+        string resolved = !string.IsNullOrWhiteSpace(authPlayerName)
+            ? authPlayerName.Trim()
+            : !string.IsNullOrWhiteSpace(tokenPlayerName)
+                ? tokenPlayerName.Trim()
+                : _config.Nick;
+
+        if (!string.Equals(resolved, _config.Nick, StringComparison.Ordinal))
+        {
+            Logger.Warning("Game", $"Using token player name '{resolved}' instead of configured nickname '{_config.Nick}' to satisfy server authentication checks");
+        }
+
+        return resolved;
+    }
+
+    private static string? TryExtractPlayerNameFromJwt(string? jwt)
+    {
+        if (string.IsNullOrWhiteSpace(jwt))
+            return null;
+
+        try
+        {
+            var parts = jwt.Split('.');
+            if (parts.Length < 2)
+                return null;
+
+            string payload = parts[1]
+                .Replace('-', '+')
+                .Replace('_', '/');
+
+            int padding = (4 - (payload.Length % 4)) % 4;
+            if (padding > 0)
+                payload = payload.PadRight(payload.Length + padding, '=');
+
+            byte[] payloadBytes = Convert.FromBase64String(payload);
+            string json = Encoding.UTF8.GetString(payloadBytes);
+
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("username", out var username) && username.ValueKind == JsonValueKind.String)
+            {
+                return username.GetString();
+            }
+
+            if (doc.RootElement.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String)
+            {
+                return name.GetString();
+            }
+        }
+        catch
+        {
+            return null;
+        }
+
+        return null;
     }
 
     private void RestoreProfileSkinData(string sessionUuid, string userDataDir)
@@ -431,7 +504,105 @@ public class GameLauncher : IGameLauncher
         }
     }
 
-    private void LogLaunchInfo(string executable, string javaPath, string gameDir, string userDataDir, string sessionUuid)
+    private void QuarantineIncompatibleServerMods(string userDataDir)
+    {
+        try
+        {
+            string modsDir = Path.Combine(userDataDir, "Mods");
+            if (!Directory.Exists(modsDir))
+                return;
+
+            string[] jarFiles = Directory.GetFiles(modsDir, "*.jar", SearchOption.TopDirectoryOnly);
+            if (jarFiles.Length == 0)
+                return;
+
+            string quarantineDir = Path.Combine(userDataDir, "DisabledMods", "IncompatibleServerVersion");
+            int quarantinedCount = 0;
+
+            foreach (string jarPath in jarFiles)
+            {
+                if (!TryReadServerVersionFromManifest(jarPath, out string? serverVersion))
+                    continue;
+
+                if (!IsKnownInvalidServerVersion(serverVersion))
+                    continue;
+
+                Directory.CreateDirectory(quarantineDir);
+
+                string fileName = Path.GetFileName(jarPath);
+                string destinationPath = Path.Combine(quarantineDir, fileName);
+                if (File.Exists(destinationPath))
+                {
+                    string suffix = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
+                    destinationPath = Path.Combine(quarantineDir, $"{Path.GetFileNameWithoutExtension(fileName)}-{suffix}{Path.GetExtension(fileName)}");
+                }
+
+                File.Move(jarPath, destinationPath);
+                quarantinedCount++;
+
+                Logger.Warning("Game", $"Disabled incompatible mod '{fileName}' (ServerVersion='{serverVersion}')");
+            }
+
+            if (quarantinedCount > 0)
+            {
+                Logger.Warning("Game", $"Moved {quarantinedCount} incompatible mod(s) to {quarantineDir} to prevent server boot failure");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Warning("Game", $"Failed to validate mod compatibility before launch: {ex.Message}");
+        }
+    }
+
+    private static bool TryReadServerVersionFromManifest(string jarPath, out string? serverVersion)
+    {
+        serverVersion = null;
+
+        try
+        {
+            using var archive = ZipFile.OpenRead(jarPath);
+            var manifestEntry = archive.Entries.FirstOrDefault(e =>
+                e.FullName.Equals("manifest.json", StringComparison.OrdinalIgnoreCase));
+            if (manifestEntry == null)
+                return false;
+
+            using var stream = manifestEntry.Open();
+            using var doc = JsonDocument.Parse(stream);
+            foreach (var property in doc.RootElement.EnumerateObject())
+            {
+                if (!property.Name.Equals("ServerVersion", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (property.Value.ValueKind == JsonValueKind.String)
+                {
+                    serverVersion = property.Value.GetString();
+                    return !string.IsNullOrWhiteSpace(serverVersion);
+                }
+
+                return false;
+            }
+        }
+        catch
+        {
+            return false;
+        }
+
+        return false;
+    }
+
+    private static bool IsKnownInvalidServerVersion(string? serverVersion)
+    {
+        if (string.IsNullOrWhiteSpace(serverVersion))
+            return false;
+
+        string normalized = serverVersion.Trim();
+        if (normalized == "*")
+            return false;
+
+        return Regex.IsMatch(normalized, @"^\d{4}\.\d{2}\.\d{2}-[a-zA-Z0-9]+$");
+    }
+
+    private void LogLaunchInfo(string executable, string javaPath, string gameDir, string userDataDir, string sessionUuid, string launchPlayerName)
     {
         Logger.Info("Game", $"Launching: {executable}");
         Logger.Info("Game", $"Java: {javaPath}");
@@ -439,22 +610,23 @@ public class GameLauncher : IGameLauncher
         Logger.Info("Game", $"UserData: {userDataDir}");
         Logger.Info("Game", $"Online Mode: {_config.OnlineMode}");
         Logger.Info("Game", $"Session UUID: {sessionUuid}");
+        Logger.Info("Game", $"Launch Player Name: {launchPlayerName}");
     }
 
     private ProcessStartInfo BuildProcessStartInfo(
         string executable, string workingDir, string versionPath,
         string userDataDir, string javaPath, string sessionUuid,
-        string? identityToken, string? sessionToken)
+        string? identityToken, string? sessionToken, string launchPlayerName)
     {
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            var startInfo = BuildWindowsStartInfo(executable, workingDir, versionPath, userDataDir, javaPath, sessionUuid, identityToken, sessionToken);
+            var startInfo = BuildWindowsStartInfo(executable, workingDir, versionPath, userDataDir, javaPath, sessionUuid, identityToken, sessionToken, launchPlayerName);
             ApplyGpuEnvironment(startInfo);
             ApplyDualAuthEnvironment(startInfo);
             return startInfo;
         }
 
-        return BuildUnixStartInfo(executable, workingDir, versionPath, userDataDir, javaPath, sessionUuid, identityToken, sessionToken);
+        return BuildUnixStartInfo(executable, workingDir, versionPath, userDataDir, javaPath, sessionUuid, identityToken, sessionToken, launchPlayerName);
     }
 
     /// <summary>
@@ -505,7 +677,7 @@ public class GameLauncher : IGameLauncher
     private ProcessStartInfo BuildWindowsStartInfo(
         string executable, string workingDir, string gameDir,
         string userDataDir, string javaPath, string sessionUuid,
-        string? identityToken, string? sessionToken)
+        string? identityToken, string? sessionToken, string launchPlayerName)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -524,7 +696,7 @@ public class GameLauncher : IGameLauncher
         startInfo.ArgumentList.Add("--java-exec");
         startInfo.ArgumentList.Add(javaPath);
         startInfo.ArgumentList.Add("--name");
-        startInfo.ArgumentList.Add(_config.Nick);
+        startInfo.ArgumentList.Add(launchPlayerName);
 
         if (_config.OnlineMode && !string.IsNullOrEmpty(identityToken) && !string.IsNullOrEmpty(sessionToken))
         {
@@ -554,14 +726,14 @@ public class GameLauncher : IGameLauncher
     private ProcessStartInfo BuildUnixStartInfo(
         string executable, string workingDir, string versionPath,
         string userDataDir, string javaPath, string sessionUuid,
-        string? identityToken, string? sessionToken)
+        string? identityToken, string? sessionToken, string launchPlayerName)
     {
         var gameArgs = new List<string>
         {
             $"--app-dir \"{versionPath}\"",
             $"--user-dir \"{userDataDir}\"",
             $"--java-exec \"{javaPath}\"",
-            $"--name \"{_config.Nick}\""
+            $"--name \"{launchPlayerName}\""
         };
 
         if (_config.OnlineMode && !string.IsNullOrEmpty(identityToken) && !string.IsNullOrEmpty(sessionToken))
@@ -587,20 +759,30 @@ public class GameLauncher : IGameLauncher
 
         string scriptContent = $@"#!/bin/bash
 # Launch script generated by HyPrism
-# Uses env to clear ALL environment variables before launching game
+# Uses env to set a clean environment before launching game
 
 # Set LD_LIBRARY_PATH to include Client directory for shared libraries
 CLIENT_DIR=""{clientDir}""
 
-{BuildGpuEnvLines()}{BuildDualAuthEnvLines()}exec env \
-    HOME=""{homeDir}"" \
-    USER=""{userName}"" \
-    PATH=""/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin"" \
-    SHELL=""/bin/zsh"" \
-    TMPDIR=""{Path.GetTempPath().TrimEnd('/')}"" \
-    LD_LIBRARY_PATH=""$CLIENT_DIR:$LD_LIBRARY_PATH"" \
-    $DUALAUTH_ENV \
-    ""{executable}"" {argsString}
+{BuildGpuEnvLines()}{BuildDualAuthEnvLines()}
+# Build env args for a clean process environment
+ENV_ARGS=()
+ENV_ARGS+=(HOME=""{homeDir}"")
+ENV_ARGS+=(USER=""{userName}"")
+ENV_ARGS+=(PATH=""/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin"")
+ENV_ARGS+=(SHELL=""/bin/zsh"")
+ENV_ARGS+=(TMPDIR=""{Path.GetTempPath().TrimEnd('/')}"")
+ENV_ARGS+=(LD_LIBRARY_PATH=""$CLIENT_DIR:$LD_LIBRARY_PATH"")
+
+# Add DualAuth env vars if set (JAVA_TOOL_OPTIONS needs special handling for paths with spaces)
+if [[ -n ""$DUALAUTH_JAVA_TOOL_OPTIONS"" ]]; then
+    ENV_ARGS+=(""JAVA_TOOL_OPTIONS=$DUALAUTH_JAVA_TOOL_OPTIONS"")
+fi
+[[ -n ""$DUALAUTH_AUTH_DOMAIN"" ]] && ENV_ARGS+=(""HYTALE_AUTH_DOMAIN=$DUALAUTH_AUTH_DOMAIN"")
+[[ -n ""$DUALAUTH_TRUST_ALL"" ]] && ENV_ARGS+=(""HYTALE_TRUST_ALL_ISSUERS=$DUALAUTH_TRUST_ALL"")
+[[ -n ""$DUALAUTH_TRUST_OFFICIAL"" ]] && ENV_ARGS+=(""HYTALE_TRUST_OFFICIAL=$DUALAUTH_TRUST_OFFICIAL"")
+
+exec env ""${{ENV_ARGS[@]}}"" ""{executable}"" {argsString}
 ";
         File.WriteAllText(launchScript, scriptContent);
 
@@ -663,12 +845,13 @@ export __NV_PRIME_RENDER_OFFLOAD=0
 
     /// <summary>
     /// Builds DualAuth environment variable lines for the Unix launch script.
-    /// Returns a string with export lines to be placed before 'exec env'.
+    /// Returns a string with variable assignments to be placed before 'exec env'.
+    /// Each variable is quoted individually to handle paths with spaces.
     /// </summary>
     private string BuildDualAuthEnvLines()
     {
         if (string.IsNullOrEmpty(_dualAuthAgentPath) || IsOfficialServerMode())
-            return "# No DualAuth (official server mode or agent unavailable)\nDUALAUTH_ENV=\"\"\n\n";
+            return "# No DualAuth (official server mode or agent unavailable)\nDUALAUTH_JAVA_TOOL_OPTIONS=\"\"\nDUALAUTH_AUTH_DOMAIN=\"\"\nDUALAUTH_TRUST_ALL=\"\"\nDUALAUTH_TRUST_OFFICIAL=\"\"\n\n";
 
         string baseDomain = _config.AuthDomain ?? "";
         if (baseDomain.StartsWith("sessions."))
@@ -676,12 +859,18 @@ export __NV_PRIME_RENDER_OFFLOAD=0
 
         Logger.Info("Game", $"DualAuth env lines for Unix script: {baseDomain}");
         
+        // Store DualAuth values in separate shell variables, then compose the
+        // JAVA_TOOL_OPTIONS=KEY=VALUE pair when building ENV_ARGS.
+        // This avoids nested quoting issues where paths with spaces (e.g.
+        // "Application Support") broke the javaagent argument.
+        // The JAVA_TOOL_OPTIONS value includes literal double quotes so Java's
+        // tokenizer treats the entire -javaagent:... as one token even when
+        // the path contains spaces.
         return $@"# DualAuth Agent Configuration
-export JAVA_TOOL_OPTIONS=""-javaagent:{_dualAuthAgentPath}""
-export HYTALE_AUTH_DOMAIN=""{baseDomain}""
-export HYTALE_TRUST_ALL_ISSUERS=""true""
-export HYTALE_TRUST_OFFICIAL=""true""
-DUALAUTH_ENV=""JAVA_TOOL_OPTIONS=$JAVA_TOOL_OPTIONS HYTALE_AUTH_DOMAIN=$HYTALE_AUTH_DOMAIN HYTALE_TRUST_ALL_ISSUERS=$HYTALE_TRUST_ALL_ISSUERS HYTALE_TRUST_OFFICIAL=$HYTALE_TRUST_OFFICIAL""
+DUALAUTH_JAVA_TOOL_OPTIONS=""\""-javaagent:{_dualAuthAgentPath}\""""
+DUALAUTH_AUTH_DOMAIN=""{baseDomain}""
+DUALAUTH_TRUST_ALL=""true""
+DUALAUTH_TRUST_OFFICIAL=""true""
 
 ";
     }

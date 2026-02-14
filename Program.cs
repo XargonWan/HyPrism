@@ -120,6 +120,12 @@ class Program
         instanceService.MigrateLegacyData();
         instanceService.MigrateVersionFoldersToIdFolders();
 
+        // Resolve icon path for the window
+        // On Windows/Linux, BrowserWindowOptions.Icon sets the window icon.
+        // On macOS, Icon is ignored by Electron; the dock icon must be set
+        // programmatically via Electron.App.Dock.SetIcon().
+        var iconPath = Path.GetFullPath(Path.Combine("Build", "icon.png"));
+
         #pragma warning disable 
 
         var mainWindow = await Electron.WindowManager.CreateWindowAsync(
@@ -134,19 +140,91 @@ class Program
                 Center = true,
                 Title = "HyPrism",
                 AutoHideMenuBar = true,
-                BackgroundColor = "#0D0D10"
+                BackgroundColor = "#0D0D10",
+                Icon = iconPath
             },
             $"file://{Path.Combine(wwwroot, "index.html")}"
         );
         
         #pragma warning restore
 
-        Electron.Menu.SetApplicationMenu([]);
+        // Set macOS dock icon (BrowserWindowOptions.Icon is a no-op on macOS)
+        if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                System.Runtime.InteropServices.OSPlatform.OSX))
+        {
+            try
+            {
+                Electron.Dock.SetIcon(iconPath);
+                Logger.Info("Boot", $"macOS dock icon set to {iconPath}");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning("Boot", $"Failed to set dock icon: {ex.Message}");
+            }
+        }
+
+        if (System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(
+                System.Runtime.InteropServices.OSPlatform.OSX))
+        {
+            void NavigateTo(string page)
+            {
+                try
+                {
+                    var script = $"window.dispatchEvent(new CustomEvent('hyprism:menu:navigate', {{ detail: {{ page: '{page}' }} }}));";
+                    _ = mainWindow.WebContents.ExecuteJavaScriptAsync<object>(script, false);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warning("Boot", $"Failed to dispatch menu navigation: {ex.Message}");
+                }
+            }
+
+            var appMenu = new MenuItem[]
+            {
+                new()
+                {
+                    Label = "HyPrism",
+                    Submenu = new[]
+                    {
+                        new MenuItem { Label = "Settings", Accelerator = "CommandOrControl+,", Click = () => NavigateTo("settings") },
+                        new MenuItem { Label = "Instances", Accelerator = "CommandOrControl+2", Click = () => NavigateTo("instances") },
+                        new MenuItem { Label = "About HyPrism", Click = () => NavigateTo("settings") },
+                        new MenuItem { Label = "Quit HyPrism", Accelerator = "CommandOrControl+Q", Click = () => Electron.App.Quit() }
+                    }
+                },
+                new()
+                {
+                    Label = "Window",
+                    Submenu = new[]
+                    {
+                        new MenuItem { Label = "Minimize", Accelerator = "CommandOrControl+M", Click = () => mainWindow.Minimize() },
+                        new MenuItem { Label = "Close", Accelerator = "CommandOrControl+W", Click = () => mainWindow.Close() }
+                    }
+                }
+            };
+
+            Electron.Menu.SetApplicationMenu(appMenu);
+        }
+        else
+        {
+            Electron.Menu.SetApplicationMenu([]);
+        }
         // Quit when all windows closed
         Electron.App.WindowAllClosed += () => Electron.App.Quit();
 
         // Show after ready
-        mainWindow.OnReadyToShow += () => mainWindow.Show();
+        mainWindow.OnReadyToShow += () =>
+        {
+            try
+            {
+                mainWindow.Center();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning("Boot", $"Failed to center window on startup: {ex.Message}");
+            }
+            mainWindow.Show();
+        };
 
         Logger.Success("Boot", "Electron window created, IPC handlers registered");
     }

@@ -335,20 +335,224 @@ public class ModService : IModService
     /// <inheritdoc/>
     public List<InstalledMod> GetInstanceInstalledMods(string instancePath)
     {
-        var modsPath = Path.Combine(instancePath, "Client", "mods");
+        var modsPath = Path.Combine(instancePath, "UserData", "Mods");
         var manifestPath = Path.Combine(modsPath, "manifest.json");
+        var legacyManifestPath = Path.Combine(instancePath, "Client", "mods", "manifest.json");
 
-        if (!File.Exists(manifestPath)) return new List<InstalledMod>(); 
+        Directory.CreateDirectory(modsPath);
+
+        List<InstalledMod> mods;
         
         try
         {
-            var json = File.ReadAllText(manifestPath);
-            return JsonSerializer.Deserialize<List<InstalledMod>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<InstalledMod>();
+            if (File.Exists(manifestPath))
+            {
+                var json = File.ReadAllText(manifestPath);
+                mods = JsonSerializer.Deserialize<List<InstalledMod>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<InstalledMod>();
+            }
+            else if (File.Exists(legacyManifestPath))
+            {
+                var json = File.ReadAllText(legacyManifestPath);
+                mods = JsonSerializer.Deserialize<List<InstalledMod>>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new List<InstalledMod>();
+            }
+            else
+            {
+                mods = new List<InstalledMod>();
+            }
         }
-        catch 
+        catch
         {
-            return new List<InstalledMod>();
+            mods = new List<InstalledMod>();
         }
+
+        // Ensure mods are discoverable even when manifest is missing or stale
+        var diskFiles = Directory.EnumerateFiles(modsPath)
+            .Select(Path.GetFileName)
+            .Where(name => !string.IsNullOrEmpty(name))
+            .Select(name => name!)
+            .Where(name => !name.Equals("manifest.json", StringComparison.OrdinalIgnoreCase))
+            .Where(name =>
+                name.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) ||
+                name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
+                name.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        static string NormalizeName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "";
+            var chars = value.Where(char.IsLetterOrDigit).ToArray();
+            return new string(chars).ToLowerInvariant();
+        }
+
+        // Keep existing metadata in sync with files when names drift (e.g. .jar -> .disabled)
+        foreach (var mod in mods)
+        {
+            if (string.IsNullOrWhiteSpace(mod.FileName))
+                continue;
+
+            if (diskFiles.Any(f => string.Equals(f, mod.FileName, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            var baseStem = mod.FileName.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase)
+                ? Path.GetFileNameWithoutExtension(mod.FileName)
+                : Path.GetFileNameWithoutExtension(mod.FileName);
+
+            var candidate = diskFiles.FirstOrDefault(f =>
+                string.Equals(Path.GetFileNameWithoutExtension(f), baseStem, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(f)), baseStem, StringComparison.OrdinalIgnoreCase));
+
+            if (!string.IsNullOrEmpty(candidate))
+            {
+                mod.FileName = candidate;
+                mod.Enabled = !candidate.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase);
+                if (!mod.Enabled && string.IsNullOrWhiteSpace(mod.DisabledOriginalExtension))
+                {
+                    var stem = Path.GetFileNameWithoutExtension(candidate);
+                    var ext = Path.GetExtension(stem).ToLowerInvariant();
+                    if (ext is ".jar" or ".zip")
+                    {
+                        mod.DisabledOriginalExtension = ext;
+                    }
+                }
+            }
+        }
+
+        // Second pass: metadata-first matching by mod name/slug to avoid duplicate "local" rows
+        foreach (var mod in mods)
+        {
+            if (!string.IsNullOrWhiteSpace(mod.FileName) &&
+                diskFiles.Any(f => string.Equals(f, mod.FileName, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            var modNameKey = NormalizeName(mod.Name);
+            var slugKey = NormalizeName(mod.Slug);
+
+            var candidate = diskFiles.FirstOrDefault(file =>
+            {
+                var stem = file.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase)
+                    ? Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(file))
+                    : Path.GetFileNameWithoutExtension(file);
+
+                var fileKey = NormalizeName(stem);
+                if (string.IsNullOrEmpty(fileKey)) return false;
+
+                var nameMatch = !string.IsNullOrEmpty(modNameKey) &&
+                                (fileKey.StartsWith(modNameKey) || modNameKey.StartsWith(fileKey));
+                var slugMatch = !string.IsNullOrEmpty(slugKey) &&
+                                (fileKey.Contains(slugKey) || slugKey.Contains(fileKey));
+
+                return nameMatch || slugMatch;
+            });
+
+            if (!string.IsNullOrEmpty(candidate))
+            {
+                mod.FileName = candidate;
+                mod.Enabled = !candidate.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase);
+                if (!mod.Enabled && string.IsNullOrWhiteSpace(mod.DisabledOriginalExtension))
+                {
+                    var stem = Path.GetFileNameWithoutExtension(candidate);
+                    var ext = Path.GetExtension(stem).ToLowerInvariant();
+                    if (ext is ".jar" or ".zip")
+                    {
+                        mod.DisabledOriginalExtension = ext;
+                    }
+                }
+            }
+        }
+
+        foreach (var fileName in diskFiles)
+        {
+            if (mods.Any(m => string.Equals(m.FileName, fileName, StringComparison.OrdinalIgnoreCase)))
+                continue;
+
+            var enabled = !fileName.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase);
+            var displayName = enabled
+                ? Path.GetFileNameWithoutExtension(fileName)
+                : Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(fileName));
+
+            var disabledOriginalExtension = "";
+            if (!enabled)
+            {
+                var stem = Path.GetFileNameWithoutExtension(fileName);
+                var ext = Path.GetExtension(stem).ToLowerInvariant();
+                if (ext is ".jar" or ".zip")
+                {
+                    disabledOriginalExtension = ext;
+                }
+            }
+
+            mods.Add(new InstalledMod
+            {
+                Id = $"local-{fileName}",
+                Name = displayName,
+                FileName = fileName,
+                Enabled = enabled,
+                Version = "local",
+                Author = "Local file",
+                DisabledOriginalExtension = disabledOriginalExtension
+            });
+        }
+
+        // Final pass: if a synthetic local entry and a metadata-backed entry represent the same mod,
+        // keep only the metadata-backed entry.
+        bool IsSyntheticLocal(InstalledMod mod)
+        {
+            var isLocalId = mod.Id?.StartsWith("local-", StringComparison.OrdinalIgnoreCase) == true;
+            var isLocalVersion = string.Equals(mod.Version, "local", StringComparison.OrdinalIgnoreCase);
+            var isLocalAuthor = string.Equals(mod.Author, "Local file", StringComparison.OrdinalIgnoreCase);
+            return isLocalId || (isLocalVersion && isLocalAuthor);
+        }
+
+        var metadataMods = mods.Where(m => !IsSyntheticLocal(m)).ToList();
+        mods = mods
+            .Where(local =>
+            {
+                if (!IsSyntheticLocal(local)) return true;
+
+                var localNameKey = NormalizeName(local.Name);
+                var localFileStem = local.FileName?.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) == true
+                    ? Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(local.FileName))
+                    : Path.GetFileNameWithoutExtension(local.FileName ?? "");
+                var localFileKey = NormalizeName(localFileStem ?? "");
+
+                var hasMetadataTwin = metadataMods.Any(meta =>
+                {
+                    var metaNameKey = NormalizeName(meta.Name);
+                    var metaSlugKey = NormalizeName(meta.Slug);
+                    var metaFileStem = meta.FileName?.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) == true
+                        ? Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(meta.FileName))
+                        : Path.GetFileNameWithoutExtension(meta.FileName ?? "");
+                    var metaFileKey = NormalizeName(metaFileStem ?? "");
+
+                    if (!string.IsNullOrEmpty(local.FileName) && !string.IsNullOrEmpty(meta.FileName) &&
+                        string.Equals(local.FileName, meta.FileName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+
+                    if (!string.IsNullOrEmpty(localNameKey) &&
+                        ((!string.IsNullOrEmpty(metaNameKey) && localNameKey == metaNameKey) ||
+                         (!string.IsNullOrEmpty(metaSlugKey) && localNameKey == metaSlugKey)))
+                    {
+                        return true;
+                    }
+
+                    if (!string.IsNullOrEmpty(localFileKey) &&
+                        ((!string.IsNullOrEmpty(metaFileKey) && localFileKey == metaFileKey) ||
+                         (!string.IsNullOrEmpty(metaNameKey) && (localFileKey.Contains(metaNameKey) || metaNameKey.Contains(localFileKey))) ||
+                         (!string.IsNullOrEmpty(metaSlugKey) && (localFileKey.Contains(metaSlugKey) || metaSlugKey.Contains(localFileKey)))))
+                    {
+                        return true;
+                    }
+
+                    return false;
+                });
+
+                return !hasMetadataTwin;
+            })
+            .ToList();
+
+        return mods;
     }
     
     /// <inheritdoc/>
@@ -357,7 +561,7 @@ public class ModService : IModService
         await _modManifestLock.WaitAsync();
         try
         {
-            var modsPath = Path.Combine(instancePath, "Client", "mods");
+            var modsPath = Path.Combine(instancePath, "UserData", "Mods");
             Directory.CreateDirectory(modsPath);
             var manifestPath = Path.Combine(modsPath, "manifest.json");
             
@@ -475,7 +679,7 @@ public class ModService : IModService
                 return false;
             }
             
-            var modsPath = Path.Combine(instancePath, "Client", "mods");
+            var modsPath = Path.Combine(instancePath, "UserData", "Mods");
             Directory.CreateDirectory(modsPath);
             
             var fileName = Path.GetFileName(sourcePath);
@@ -515,7 +719,7 @@ public class ModService : IModService
     {
         try
         {
-            var modsPath = Path.Combine(instancePath, "Client", "mods");
+            var modsPath = Path.Combine(instancePath, "UserData", "Mods");
             Directory.CreateDirectory(modsPath);
             
             var destPath = Path.Combine(modsPath, fileName);

@@ -360,10 +360,10 @@
       "unknown": "Неизвестно"
     },
     "tab": {
-      "content": "Контент",
+      "content": "Mods",
       "worlds": "Миры",
       "logs": "Логи",
-      "browse": "Поиск"
+      "browse": "Browse Mods"
     },
     "saves": "Сохранения",
     "noSaves": "Сохранений не найдено",

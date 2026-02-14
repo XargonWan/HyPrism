@@ -55,8 +55,10 @@ HyPrism stores its data (config, instances, profiles, logs) in:
 ```
 HyPrism/
 ├── config.json         # Launcher configuration
-├── Instances/          # Game installations (GUID-based folders)
-│   └── {GUID}/         # Individual instance
+├── Instances/          # Game installations grouped by branch/version
+│   └── release/
+│       ├── v8/         # Individual versioned instance
+│       └── latest/     # Latest-tracked instance
 ├── Profiles/           # Player profiles and skin backups
 ├── Logs/               # Application logs
 └── Cache/              # Temporary files

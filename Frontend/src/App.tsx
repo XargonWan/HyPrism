@@ -25,6 +25,7 @@ const OnboardingModal = lazy(() => import('./components/modals/OnboardingModal')
 const _BrowserOpenURL = (url: string) => ipc.browser.open(url);
 const WindowClose = () => ipc.windowCtl.close();
 const CancelDownload = () => ipc.game.cancel();
+const StopGame = () => ipc.game.stop();
 const GetNews = (_count: number): Promise<NewsItem[]> => ipc.news.get();
 
 function EventsOn(event: string, cb: (...args: any[]) => void): () => void {
@@ -63,7 +64,6 @@ const stub = <T,>(name: string, fallback: T) => async (..._args: any[]): Promise
 const _OpenInstanceFolder = stub('OpenInstanceFolder', undefined as void);
 const DeleteGame = stub('DeleteGame', false);
 const Update = stub('Update', undefined as void);
-const ExitGame = stub('ExitGame', undefined as void);
 const GetRecentLogs = stub<string[]>('GetRecentLogs', []);
 
 // Real IPC call to check if game is running
@@ -121,6 +121,17 @@ const parseDateMs = (dateValue: string | number | Date | undefined): number => {
   if (!dateValue) return 0;
   const ms = new Date(dateValue).getTime();
   return Number.isNaN(ms) ? 0 : ms;
+};
+
+const resolveSelectedInstance = (
+  selected: InstanceInfo | null,
+  allInstances: InstanceInfo[]
+): InstanceInfo | null => {
+  if (selected) return selected;
+  if (!Array.isArray(allInstances) || allInstances.length === 0) return null;
+
+  const installed = allInstances.find((inst) => inst.isInstalled);
+  return installed ?? allInstances[0];
 };
 
 const formatDateConsistent = (dateMs: number, locale = 'en-US') => {
@@ -244,6 +255,21 @@ const App: React.FC = () => {
     selectedInstanceRef.current = selectedInstance;
   }, [selectedInstance]);
 
+  useEffect(() => {
+    const handleMenuNavigate = (evt: Event) => {
+      const event = evt as CustomEvent<{ page?: PageType }>;
+      const page = event.detail?.page;
+      if (page) {
+        setCurrentPage(page);
+      }
+    };
+
+    window.addEventListener('hyprism:menu:navigate', handleMenuNavigate as EventListener);
+    return () => {
+      window.removeEventListener('hyprism:menu:navigate', handleMenuNavigate as EventListener);
+    };
+  }, []);
+
   // Onboarding state
   const [showOnboarding, setShowOnboarding] = useState<boolean>(false);
   const [onboardingChecked, setOnboardingChecked] = useState<boolean>(false);
@@ -284,8 +310,17 @@ const App: React.FC = () => {
           GetSelectedInstance(),
           GetInstances()
         ]);
-        setSelectedInstance(selected);
+        const resolvedSelected = resolveSelectedInstance(selected, allInstances);
+        setSelectedInstance(resolvedSelected);
+        selectedInstanceRef.current = resolvedSelected;
         setInstances(allInstances);
+
+        if (resolvedSelected && !selected) {
+          ipc.instance.select({ id: resolvedSelected.id }).catch((e) => {
+            console.error('Failed to persist auto-selected instance:', e);
+          });
+        }
+
         // TODO: Check if update is available for selected instance
         setHasUpdateAvailable(false);
       } catch (e) {
@@ -305,8 +340,16 @@ const App: React.FC = () => {
         GetSelectedInstance(),
         GetInstances()
       ]);
-      setSelectedInstance(selected);
+      const resolvedSelected = resolveSelectedInstance(selected, allInstances);
+      setSelectedInstance(resolvedSelected);
+      selectedInstanceRef.current = resolvedSelected;
       setInstances(allInstances);
+
+      if (resolvedSelected && !selected) {
+        ipc.instance.select({ id: resolvedSelected.id }).catch((e) => {
+          console.error('Failed to persist auto-selected instance during refresh:', e);
+        });
+      }
     } catch (e) {
       console.error('Failed to refresh instances:', e);
     }
@@ -321,6 +364,18 @@ const App: React.FC = () => {
           console.log('[App] Found existing game process, connecting...');
           setIsGameRunning(true);
           setLaunchState('running');
+
+          const [selected, allInstances] = await Promise.all([
+            GetSelectedInstance(),
+            GetInstances()
+          ]);
+          const resolvedSelected = resolveSelectedInstance(selected, allInstances);
+          if (resolvedSelected) {
+            setRunningBranch(resolvedSelected.branch);
+            setRunningVersion(resolvedSelected.version);
+            setSelectedInstance(resolvedSelected);
+            selectedInstanceRef.current = resolvedSelected;
+          }
         }
       } catch (e) {
         console.error('[App] Failed to check existing game process:', e);
@@ -394,9 +449,17 @@ const App: React.FC = () => {
   useEffect(() => {
     const checkOnboarding = async () => {
       try {
+        // Quick check: localStorage flag (avoids IPC race conditions on startup)
+        if (localStorage.getItem('hyprism_onboarding_done') === '1') {
+          setOnboardingChecked(true);
+          return;
+        }
         const completed = await GetHasCompletedOnboarding();
         if (!completed) {
           setShowOnboarding(true);
+        } else {
+          // Cache in localStorage so next startup is instant
+          localStorage.setItem('hyprism_onboarding_done', '1');
         }
         setOnboardingChecked(true);
       } catch (err) {
@@ -410,6 +473,7 @@ const App: React.FC = () => {
   // Handle onboarding completion
   const handleOnboardingComplete = async () => {
     setShowOnboarding(false);
+    localStorage.setItem('hyprism_onboarding_done', '1');
     // Reload profile data after onboarding
     await reloadProfile();
     // Reload instance directory
@@ -557,6 +621,22 @@ const App: React.FC = () => {
         if (inst) {
           setRunningBranch(inst.branch);
           setRunningVersion(inst.version);
+        } else {
+          try {
+            const [selected, allInstances] = await Promise.all([
+              GetSelectedInstance(),
+              GetInstances()
+            ]);
+            const resolvedSelected = resolveSelectedInstance(selected, allInstances);
+            if (resolvedSelected) {
+              setRunningBranch(resolvedSelected.branch);
+              setRunningVersion(resolvedSelected.version);
+              setSelectedInstance(resolvedSelected);
+              selectedInstanceRef.current = resolvedSelected;
+            }
+          } catch (e) {
+            console.error('[App] Failed to resolve running instance on start event:', e);
+          }
         }
         clearDownloadState();
         setProgress(0);
@@ -656,6 +736,19 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDashboardInstanceSelect = async (inst: InstanceInfo) => {
+    if (selectedInstanceRef.current?.id === inst.id) {
+      return;
+    }
+    try {
+      await ipc.instance.select({ id: inst.id });
+      setSelectedInstance(inst);
+      selectedInstanceRef.current = inst;
+    } catch (e) {
+      console.error('[App] Failed to select instance from dashboard:', e);
+    }
+  };
+
   const handlePlay = async () => {
     // Prevent launching if game is already running or download is in progress
     if (isGameRunning) {
@@ -705,6 +798,16 @@ const App: React.FC = () => {
   // Launch a specific instance from the Instances page — properly tracks download state
   const handleLaunchFromInstances = (branch: string, version: number) => {
     if (isGameRunning || isDownloading) return;
+
+    const launchingInstance = instances.find(inst => inst.branch === branch && inst.version === version) ?? null;
+    if (launchingInstance) {
+      setSelectedInstance(launchingInstance);
+      selectedInstanceRef.current = launchingInstance;
+      ipc.instance.select({ id: launchingInstance.id }).catch((e) => {
+        console.error('Failed to persist launched instance selection:', e);
+      });
+    }
+
     setIsDownloading(true);
     setDownloadingBranch(branch);
     setDownloadingVersion(version);
@@ -759,7 +862,7 @@ const App: React.FC = () => {
 
   const handleExit = async () => {
     try {
-      await ExitGame();
+      await StopGame();
     } catch (err) {
       console.error('Failed to exit game:', err);
     }
@@ -908,6 +1011,9 @@ const App: React.FC = () => {
 
       {/* Page Content with Transitions */}
       <main className="relative z-10 h-full">
+        {currentPage === 'logs' ? (
+          <LogsPage key="logs" />
+        ) : (
         <AnimatePresence mode="wait">
           {currentPage === 'dashboard' && (
             <DashboardPage
@@ -929,14 +1035,17 @@ const App: React.FC = () => {
               launchState={launchState}
               launchDetail={launchDetail}
               selectedInstance={selectedInstance}
+              instances={instances}
               hasInstances={instances.length > 0}
               isCheckingInstance={isCheckingInstance}
               hasUpdateAvailable={hasUpdateAvailable}
               onPlay={handlePlay}
+              onStopGame={handleExit}
               onDownload={handleDownload}
               onUpdate={handleGameUpdate}
               onCancelDownload={handleCancelDownload}
               onNavigateToInstances={() => setCurrentPage('instances')}
+              onInstanceSelect={handleDashboardInstanceSelect}
               officialServerBlocked={officialServerBlocked}
               isOfficialProfile={isOfficialProfile}
               isOfficialServerMode={isOfficialServerMode}
@@ -984,10 +1093,6 @@ const App: React.FC = () => {
             />
           )}
 
-          {currentPage === 'logs' && (
-            <LogsPage key="logs" />
-          )}
-
           {currentPage === 'settings' && (
             <SettingsPage
               key="settings"
@@ -1006,6 +1111,7 @@ const App: React.FC = () => {
             />
           )}
         </AnimatePresence>
+        )}
       </main>
 
       {/* Floating Dock Menu - hide during data migration */}

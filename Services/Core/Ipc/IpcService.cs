@@ -180,6 +180,7 @@ public class IpcService
     // #region Game Session
     // @ipc send hyprism:game:launch
     // @ipc send hyprism:game:cancel
+    // @ipc invoke hyprism:game:stop -> boolean
     // @ipc invoke hyprism:game:instances -> InstalledInstance[]
     // @ipc invoke hyprism:game:isRunning -> boolean
     // @ipc invoke hyprism:game:versions -> number[]
@@ -259,6 +260,21 @@ public class IpcService
         {
             Logger.Info("IPC", "Game download cancel requested");
             gameSession.CancelDownload();
+        });
+
+        Electron.IpcMain.On("hyprism:game:stop", (_) =>
+        {
+            try
+            {
+                var stopped = gameProcessService.ExitGame();
+                Logger.Info("IPC", stopped ? "Game stop requested and process terminated" : "Game stop requested but no running process found");
+                Reply("hyprism:game:stop:reply", stopped);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("IPC", $"Game stop failed: {ex.Message}");
+                Reply("hyprism:game:stop:reply", false);
+            }
         });
 
         Electron.IpcMain.On("hyprism:game:instances", (_) =>
@@ -565,7 +581,7 @@ public class IpcService
                     return;
                 }
                 
-                var modsPath = Path.Combine(instancePath, "Client", "mods");
+                var modsPath = Path.Combine(instancePath, "UserData", "Mods");
                 
                 if (!Directory.Exists(modsPath))
                 {
@@ -691,7 +707,7 @@ public class IpcService
                     ? Guid.NewGuid().ToString() 
                     : existingId;
                 
-                var targetPath = instanceService.CreateInstanceDirectory(branch, newInstanceId);
+                var targetPath = instanceService.CreateInstanceDirectory(branch, newInstanceId, version);
                 
                 // Update meta.json with new ID if it was changed
                 if (File.Exists(metaPath) && (idAlreadyExists || string.IsNullOrEmpty(existingId)))
@@ -805,6 +821,51 @@ public class IpcService
             catch (Exception ex)
             {
                 Logger.Error("IPC", $"Failed to open save folder: {ex.Message}");
+            }
+        });
+
+        // Delete save folder
+        Electron.IpcMain.On("hyprism:instance:deleteSave", (args) =>
+        {
+            try
+            {
+                var json = ArgsToJson(args);
+                var data = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json, JsonOpts);
+                var branch = data?["branch"].GetString() ?? "release";
+                var version = data?["version"].GetInt32() ?? 0;
+                var saveName = data?["saveName"].GetString() ?? "";
+
+                if (string.IsNullOrWhiteSpace(saveName))
+                {
+                    Reply("hyprism:instance:deleteSave:reply", false);
+                    return;
+                }
+
+                var instancePath = instanceService.GetInstancePath(branch, version);
+                var savesPath = Path.GetFullPath(Path.Combine(instancePath, "UserData", "Saves"));
+                var targetSavePath = Path.GetFullPath(Path.Combine(savesPath, saveName));
+
+                if (!targetSavePath.StartsWith(savesPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    Logger.Warning("IPC", $"Blocked save delete outside saves directory: {targetSavePath}");
+                    Reply("hyprism:instance:deleteSave:reply", false);
+                    return;
+                }
+
+                if (!Directory.Exists(targetSavePath))
+                {
+                    Reply("hyprism:instance:deleteSave:reply", false);
+                    return;
+                }
+
+                Directory.Delete(targetSavePath, true);
+                Logger.Info("IPC", $"Deleted save folder: {targetSavePath}");
+                Reply("hyprism:instance:deleteSave:reply", true);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("IPC", $"Failed to delete save folder: {ex.Message}");
+                Reply("hyprism:instance:deleteSave:reply", false);
             }
         });
 
@@ -1413,7 +1474,7 @@ public class IpcService
                     // Delete the actual mod file if it exists
                     if (!string.IsNullOrEmpty(modToRemove.FileName))
                     {
-                        var modFilePath = Path.Combine(instancePath, "Client", "mods", modToRemove.FileName);
+                        var modFilePath = Path.Combine(instancePath, "UserData", "Mods", modToRemove.FileName);
                         if (File.Exists(modFilePath))
                         {
                             try { File.Delete(modFilePath); }
@@ -1597,7 +1658,7 @@ public class IpcService
                 else
                     instancePath = instanceService.GetLatestInstancePath(branch);
                 
-                var modsPath = Path.Combine(instancePath, "Client", "mods");
+                var modsPath = Path.Combine(instancePath, "UserData", "Mods");
                 Directory.CreateDirectory(modsPath);
                 Electron.Shell.OpenPathAsync(modsPath);
             }
@@ -1628,32 +1689,102 @@ public class IpcService
                     return;
                 }
                 
-                var modsDir = Path.Combine(instancePath, "Client", "mods");
+                var modsDir = Path.Combine(instancePath, "UserData", "Mods");
                 var currentPath = Path.Combine(modsDir, mod.FileName);
+                var fileName = mod.FileName;
+                var sourceExists = File.Exists(currentPath);
+
+                if (!sourceExists)
+                {
+                    // Recover from stale manifest filenames by probing likely variants
+                    var stem = Path.GetFileNameWithoutExtension(fileName);
+                    var candidates = new[]
+                    {
+                        Path.Combine(modsDir, fileName),
+                        Path.Combine(modsDir, $"{stem}.jar"),
+                        Path.Combine(modsDir, $"{stem}.zip"),
+                        Path.Combine(modsDir, $"{stem}.disabled"),
+                        Path.Combine(modsDir, $"{stem}.jar.disabled"),
+                        Path.Combine(modsDir, $"{stem}.zip.disabled"),
+                    };
+
+                    var found = candidates.FirstOrDefault(File.Exists);
+                    if (!string.IsNullOrEmpty(found))
+                    {
+                        currentPath = found;
+                        fileName = Path.GetFileName(found);
+                        mod.FileName = fileName;
+                        sourceExists = true;
+                    }
+                }
+
+                if (!sourceExists)
+                {
+                    Reply("hyprism:mods:toggle:reply", false);
+                    return;
+                }
                 
                 if (mod.Enabled)
                 {
-                    // Disable: rename file.jar -> file.jar.disabled
-                    var disabledPath = currentPath + ".disabled";
-                    if (File.Exists(currentPath))
+                    // Disable: rename file.jar/file.zip -> file.disabled
+                    var currentFileName = Path.GetFileName(currentPath);
+                    var baseName = Path.GetFileNameWithoutExtension(currentFileName);
+                    var ext = Path.GetExtension(currentFileName).ToLowerInvariant();
+
+                    if (currentFileName.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase))
                     {
-                        File.Move(currentPath, disabledPath);
-                        mod.FileName = mod.FileName + ".disabled";
+                        mod.Enabled = false;
+                        mod.FileName = currentFileName;
+                    }
+                    else
+                    {
+                        if (ext is ".jar" or ".zip")
+                        {
+                            mod.DisabledOriginalExtension = ext;
+                        }
+
+                        var disabledFileName = $"{baseName}.disabled";
+                        var disabledPath = Path.Combine(modsDir, disabledFileName);
+                        File.Move(currentPath, disabledPath, true);
+                        mod.FileName = disabledFileName;
                         mod.Enabled = false;
                         Logger.Info("IPC", $"Disabled mod: {mod.Name}");
                     }
                 }
                 else
                 {
-                    // Enable: rename file.jar.disabled -> file.jar
-                    if (mod.FileName.EndsWith(".disabled") && File.Exists(currentPath))
+                    // Enable: rename *.disabled -> *.jar or *.zip (restored)
+                    var currentFileName = Path.GetFileName(currentPath);
+                    var stem = currentFileName.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase)
+                        ? currentFileName[..^".disabled".Length]
+                        : Path.GetFileNameWithoutExtension(currentFileName);
+
+                    string restoreExtension;
+                    if (!string.IsNullOrWhiteSpace(mod.DisabledOriginalExtension))
                     {
-                        var enabledPath = currentPath[..^".disabled".Length];
-                        File.Move(currentPath, enabledPath);
-                        mod.FileName = mod.FileName[..^".disabled".Length];
-                        mod.Enabled = true;
-                        Logger.Info("IPC", $"Enabled mod: {mod.Name}");
+                        restoreExtension = mod.DisabledOriginalExtension.StartsWith('.')
+                            ? mod.DisabledOriginalExtension
+                            : $".{mod.DisabledOriginalExtension}";
                     }
+                    else if (stem.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) || stem.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                    {
+                        restoreExtension = "";
+                    }
+                    else
+                    {
+                        restoreExtension = ".jar";
+                    }
+
+                    var enabledFileName = string.IsNullOrEmpty(restoreExtension)
+                        ? stem
+                        : $"{stem}{restoreExtension}";
+                    var enabledPath = Path.Combine(modsDir, enabledFileName);
+
+                    File.Move(currentPath, enabledPath, true);
+                    mod.FileName = enabledFileName;
+                    mod.Enabled = true;
+                    mod.DisabledOriginalExtension = "";
+                    Logger.Info("IPC", $"Enabled mod: {mod.Name}");
                 }
                 
                 await modService.SaveInstanceModsAsync(instancePath, mods);
@@ -1807,7 +1938,7 @@ public class IpcService
                 if (exportType == "zip")
                 {
                     // Zip the mods folder
-                    var modsDir = Path.Combine(instancePath, "Client", "mods");
+                    var modsDir = Path.Combine(instancePath, "UserData", "Mods");
                     if (!Directory.Exists(modsDir))
                     {
                         Reply("hyprism:mods:exportToFolder:reply", "");

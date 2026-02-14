@@ -127,6 +127,12 @@ ipc.game.onProgress((data) => setProgress(data.progress));
 ipc.browser.open('https://example.com');
 ```
 
+## Instance State Resilience
+
+- The app auto-selects a fallback instance when the backend returns a list but no explicit selection.
+- The fallback prefers an installed instance, then first available instance.
+- When game-running state is true but running branch/version is temporarily unknown, instance controls treat the currently selected instance as the active one to avoid a permanently disabled Play button.
+
 ## Context Providers
 
 Game state is managed via `GameContext`:

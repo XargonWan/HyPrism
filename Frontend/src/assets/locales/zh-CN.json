@@ -360,10 +360,10 @@
       "unknown": "未知"
     },
     "tab": {
-      "content": "内容",
+      "content": "Mods",
       "worlds": "世界",
       "logs": "日志",
-      "browse": "浏览"
+      "browse": "Browse Mods"
     },
     "saves": "存档",
     "noSaves": "未找到存档",

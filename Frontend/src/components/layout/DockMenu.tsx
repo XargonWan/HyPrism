@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Home, Newspaper, Users, HardDrive, Settings, Volume2, VolumeX, FileText, type LucideIcon } from 'lucide-react';
+import { Home, Newspaper, Users, HardDrive, Settings, Volume2, VolumeX, type LucideIcon } from 'lucide-react';
 import { useAccentColor } from '../../contexts/AccentColorContext';
 
 import { useTranslation } from 'react-i18next';
@@ -18,7 +18,6 @@ const dockItems: DockItem[] = [
   { id: 'news', icon: Newspaper, labelKey: 'dock.news' },
   { id: 'profiles', icon: Users, labelKey: 'dock.profiles' },
   { id: 'instances', icon: HardDrive, labelKey: 'dock.instances' },
-  { id: 'logs', icon: FileText, labelKey: 'dock.logs' },
   { id: 'settings', icon: Settings, labelKey: 'dock.settings' },
 ];
 

@@ -360,10 +360,10 @@
       "unknown": "Desconhecido"
     },
     "tab": {
-      "content": "Conteúdo",
+      "content": "Mods",
       "worlds": "Mundos",
       "logs": "Logs",
-      "browse": "Explorar"
+      "browse": "Browse Mods"
     },
     "saves": "Saves",
     "noSaves": "Nenhum save encontrado",

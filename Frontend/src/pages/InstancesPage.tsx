@@ -99,6 +99,15 @@ const OpenSaveFolder = (branch: string, version: number, saveName: string): void
   send('hyprism:instance:openSaveFolder', { branch, version, saveName });
 };
 
+const DeleteSaveFolder = async (branch: string, version: number, saveName: string): Promise<boolean> => {
+  try {
+    return await invoke<boolean>('hyprism:instance:deleteSave', { branch, version, saveName });
+  } catch (e) {
+    console.warn('[IPC] DeleteSaveFolder:', e);
+    return false;
+  }
+};
+
 // Instance icon IPC calls
 const GetInstanceIcon = async (instanceId: string): Promise<string | null> => {
   try {
@@ -250,6 +259,7 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
   const [isLoadingMods, setIsLoadingMods] = useState(false);
   const [modsSearchQuery, setModsSearchQuery] = useState('');
   const [selectedMods, setSelectedMods] = useState<Set<string>>(new Set());
+  const contentSelectionAnchorRef = useRef<number | null>(null);
   const [modToDelete, setModToDelete] = useState<ModInfo | null>(null);
   const [isDeletingMod, setIsDeletingMod] = useState(false);
   const [editingInstanceName, setEditingInstanceName] = useState(false);
@@ -270,6 +280,8 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
   // Instance action menu
   const [showInstanceMenu, setShowInstanceMenu] = useState(false);
   const instanceMenuRef = useRef<HTMLDivElement>(null);
+  const [inlineMenuInstanceId, setInlineMenuInstanceId] = useState<string | null>(null);
+  const inlineMenuRef = useRef<HTMLDivElement>(null);
 
   // Create Instance Modal
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -379,28 +391,39 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
       setInstalledMods([]);
       return;
     }
+    const currentInstance = selectedInstance;
     
     setIsLoadingMods(true);
     try {
-      const mods = await GetInstanceInstalledMods(selectedInstance.branch, selectedInstance.version);
+      const mods = await GetInstanceInstalledMods(currentInstance.branch, currentInstance.version);
       const normalized = normalizeInstalledMods(mods || []);
       setInstalledMods(normalized);
+      setIsLoadingMods(false);
       
-      // Check for updates (use short timeout since it may be stubbed)
-      try {
-        const updates = await CheckInstanceModUpdates(selectedInstance.branch, selectedInstance.version);
-        const normalizedUpdates = normalizeInstalledMods(updates || []);
-        setModsWithUpdates(normalizedUpdates);
-        setUpdateCount(normalizedUpdates.length);
-      } catch {
-        setModsWithUpdates([]);
-        setUpdateCount(0);
-      }
+      // Check updates in background to keep the list snappy
+      void (async () => {
+        try {
+          const updates = await CheckInstanceModUpdates(currentInstance.branch, currentInstance.version);
+          const normalizedUpdates = normalizeInstalledMods(updates || []);
+          // Apply only if still on same instance
+          if (selectedInstanceRef.current?.id === currentInstance.id) {
+            setModsWithUpdates(normalizedUpdates);
+            setUpdateCount(normalizedUpdates.length);
+          }
+        } catch {
+          if (selectedInstanceRef.current?.id === currentInstance.id) {
+            setModsWithUpdates([]);
+            setUpdateCount(0);
+          }
+        }
+      })();
     } catch (err) {
       console.error('Failed to load installed mods:', err);
       setInstalledMods([]);
+      setModsWithUpdates([]);
+      setUpdateCount(0);
+      setIsLoadingMods(false);
     }
-    setIsLoadingMods(false);
   }, [selectedInstance]);
 
   useEffect(() => {
@@ -479,6 +502,72 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
     );
   }, [installedMods, modsSearchQuery]);
 
+  const toggleContentModSelection = useCallback((modId: string, index: number) => {
+    setSelectedMods((prev) => {
+      const next = new Set(prev);
+      if (next.has(modId)) {
+        next.delete(modId);
+      } else {
+        next.add(modId);
+      }
+      return next;
+    });
+    contentSelectionAnchorRef.current = index;
+  }, []);
+
+  const handleContentShiftLeftClick = useCallback((e: React.MouseEvent, index: number) => {
+    if (!e.shiftKey) {
+      return;
+    }
+
+    e.preventDefault();
+
+    if (filteredMods.length === 0) {
+      return;
+    }
+
+    const anchor = contentSelectionAnchorRef.current ?? index;
+    const start = Math.min(anchor, index);
+    const end = Math.max(anchor, index);
+    const ids = filteredMods.slice(start, end + 1).map((mod) => mod.id);
+
+    setSelectedMods(new Set(ids));
+  }, [filteredMods]);
+
+  const getCurseForgeUrl = useCallback((mod: ModInfo): string => {
+    if (mod.slug) {
+      return `https://www.curseforge.com/hytale/mods/${mod.slug}`;
+    }
+    const id = mod.curseForgeId || (typeof mod.id === 'string' && mod.id.startsWith('cf-') ? mod.id.replace('cf-', '') : mod.id);
+    return `https://www.curseforge.com/hytale/mods/search?search=${encodeURIComponent(String(id || mod.name))}`;
+  }, []);
+
+  const getTabLabel = useCallback((tab: InstanceTab) => {
+    if (tab === 'content') return 'Installed Mods';
+    return t(`instances.tab.${tab}`);
+  }, [t]);
+
+  const handleOpenModPage = useCallback((e: React.MouseEvent, mod: ModInfo) => {
+    e.preventDefault();
+    e.stopPropagation();
+    ipc.browser.open(getCurseForgeUrl(mod));
+  }, [getCurseForgeUrl]);
+
+  const handleDeleteSave = useCallback(async (e: React.MouseEvent, saveName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!selectedInstance) return;
+
+    const ok = await DeleteSaveFolder(selectedInstance.branch, selectedInstance.version, saveName);
+    if (ok) {
+      setMessage({ type: 'success', text: 'World deleted' });
+      await loadSaves();
+    } else {
+      setMessage({ type: 'error', text: 'Failed to delete world' });
+    }
+    setTimeout(() => setMessage(null), 3000);
+  }, [selectedInstance, loadSaves, t]);
+
   const handleExport = async (inst: InstalledVersionInfo) => {
     setExportingInstance(inst.id);
     try {
@@ -537,10 +626,17 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
     }
   };
 
+  const handleOpenModsFolderFor = (inst: InstalledVersionInfo) => {
+    OpenInstanceModsFolder(inst.id);
+  };
+
   // Launch an instance
   const handleLaunchInstance = (inst: InstalledVersionInfo) => {
+    const runningIdentityKnown = !!runningBranch && runningVersion !== undefined;
+    const isLikelyRunningThis = isGameRunning && (!runningIdentityKnown || (runningBranch === inst.branch && runningVersion === inst.version));
+
     // If this instance is currently running, stop it instead
-    if (isGameRunning && runningBranch === inst.branch && runningVersion === inst.version) {
+    if (isLikelyRunningThis) {
       onStopGame?.();
     } else {
       onLaunchInstance?.(inst.branch, inst.version);
@@ -690,6 +786,9 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
       if (instanceMenuRef.current && !instanceMenuRef.current.contains(e.target as Node)) {
         setShowInstanceMenu(false);
       }
+      if (inlineMenuRef.current && !inlineMenuRef.current.contains(e.target as Node)) {
+        setInlineMenuInstanceId(null);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -766,16 +865,26 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
               const validation = getValidationInfo(inst);
               
               return (
+                <div key={key} className="relative">
                 <button
-                  key={key}
                   onClick={() => {
                     setSelectedInstance(inst);
+                    setInlineMenuInstanceId(null);
                     // Save selected instance to config
                     if (inst.id) {
                       ipc.instance.select({ id: inst.id }).then(() => {
                         onInstanceSelected?.();
                       }).catch(console.error);
                     }
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setSelectedInstance(inst);
+                    if (inst.id) {
+                      ipc.instance.select({ id: inst.id }).catch(console.error);
+                    }
+                    setInlineMenuInstanceId(inst.id);
+                    setShowInstanceMenu(false);
                   }}
                   className={`w-full p-3 rounded-xl flex items-center gap-3 text-left transition-all duration-150 ${
                     isSelected 
@@ -828,6 +937,71 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                     <ChevronRight size={14} style={{ color: accentColor }} />
                   )}
                 </button>
+                {inlineMenuInstanceId === inst.id && (
+                  <div
+                    ref={inlineMenuRef}
+                    className="absolute left-2 right-2 top-full mt-1 bg-[#1c1c1e] border border-white/[0.08] rounded-xl shadow-xl overflow-hidden z-40"
+                  >
+                    <button
+                      onClick={() => {
+                        setSelectedInstance(inst);
+                        setShowEditModal(true);
+                        setInlineMenuInstanceId(null);
+                      }}
+                      className="w-full px-4 py-2.5 text-sm text-left text-white/70 hover:text-white hover:bg-white/10 flex items-center gap-2"
+                    >
+                      <Edit2 size={14} />
+                      {t('common.edit')}
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleOpenFolder(inst);
+                        setInlineMenuInstanceId(null);
+                      }}
+                      className="w-full px-4 py-2.5 text-sm text-left text-white/70 hover:text-white hover:bg-white/10 flex items-center gap-2"
+                    >
+                      <FolderOpen size={14} />
+                      {t('common.openFolder')}
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleOpenModsFolderFor(inst);
+                        setInlineMenuInstanceId(null);
+                      }}
+                      className="w-full px-4 py-2.5 text-sm text-left text-white/70 hover:text-white hover:bg-white/10 flex items-center gap-2"
+                    >
+                      <Package size={14} />
+                      {t('modManager.openModsFolder')}
+                    </button>
+                    <button
+                      onClick={() => {
+                        handleExport(inst);
+                        setInlineMenuInstanceId(null);
+                      }}
+                      disabled={exportingInstance !== null}
+                      className="w-full px-4 py-2.5 text-sm text-left text-white/70 hover:text-white hover:bg-white/10 flex items-center gap-2"
+                    >
+                      {exportingInstance === inst.id ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : (
+                        <Upload size={14} />
+                      )}
+                      {t('common.export')}
+                    </button>
+                    <div className="border-t border-white/10 my-1" />
+                    <button
+                      onClick={() => {
+                        setInstanceToDelete(inst);
+                        setInlineMenuInstanceId(null);
+                      }}
+                      className="w-full px-4 py-2.5 text-sm text-left text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center gap-2"
+                    >
+                      <Trash2 size={14} />
+                      {t('common.delete')}
+                    </button>
+                  </div>
+                )}
+                </div>
               );
             })
           )}
@@ -856,22 +1030,21 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                 {/* Tabs with sliding indicator */}
                 <div
                   ref={tabContainerRef}
-                  className="relative flex items-center gap-1 px-1.5 py-1 bg-[#1c1c1e] rounded-xl border border-white/[0.06]"
+                  className="relative flex items-center gap-1 px-1.5 py-1.5 bg-[#1c1c1e] rounded-2xl border border-white/10"
                 >
                   {/* Sliding indicator */}
                   <div
-                    className="absolute rounded-lg shadow-sm"
+                    className="absolute rounded-xl"
                     style={{
-                      backgroundColor: accentColor,
+                      background: `linear-gradient(135deg, ${accentColor}, ${accentColor}cc)`,
                       left: sliderStyle.left,
                       width: sliderStyle.width,
-                      top: '0.25rem',
-                      bottom: '0.25rem',
+                      top: '0.3rem',
+                      bottom: '0.3rem',
                       transition: sliderReady
                         ? 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
                         : 'none',
                       opacity: sliderReady ? 1 : 0,
-                      boxShadow: `0 1px 6px ${accentColor}40`,
                     }}
                   />
                   {tabs.map((tab) => {
@@ -882,17 +1055,17 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                     ref={(el) => { tabRefs.current[tab] = el; }}
                     onClick={() => !isTabDisabled && setActiveTab(tab)}
                     disabled={isTabDisabled}
-                    className={`relative z-10 px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 ${
+                    className={`relative z-10 px-5 py-2 rounded-xl text-sm font-bold transition-colors duration-200 whitespace-nowrap ${
                       activeTab === tab
                         ? 'text-white'
                         : isTabDisabled
                           ? 'text-white/25 cursor-not-allowed'
-                          : 'text-white/50 hover:text-white/70'
+                          : 'text-white/80 hover:text-white'
                     }`}
                     style={activeTab === tab ? { color: accentTextColor } : undefined}
                     title={isTabDisabled ? t('instances.instanceNotInstalled') : undefined}
                   >
-                    {t(`instances.tab.${tab}`)}
+                    {getTabLabel(tab)}
                   </button>
                   );
                 })}
@@ -903,7 +1076,8 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
               <div className="flex items-center gap-2">
                 {/* Full state-aware Play/Stop/Download button */}
                 {(() => {
-                  const isThisRunning = isGameRunning && runningBranch === selectedInstance.branch && runningVersion === selectedInstance.version;
+                  const runningIdentityKnown = !!runningBranch && runningVersion !== undefined;
+                  const isThisRunning = isGameRunning && (!runningIdentityKnown || (runningBranch === selectedInstance.branch && runningVersion === selectedInstance.version));
                   const isThisDownloading = isDownloading && downloadingBranch === selectedInstance.branch && downloadingVersion === selectedInstance.version;
                   const isInstalled = selectedInstance.validationStatus === 'Valid';
 
@@ -948,7 +1122,7 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                   }
 
                   // Game running on ANOTHER instance → disabled
-                  if (isGameRunning) {
+                  if (isGameRunning && runningIdentityKnown) {
                     return (
                       <button
                         disabled
@@ -1153,15 +1327,6 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                       />
                     </div>
 
-                    {/* Mods Label */}
-                    <div
-                      className="h-10 px-4 rounded-xl text-sm font-medium flex items-center gap-2 flex-shrink-0"
-                      style={{ backgroundColor: accentColor, color: accentTextColor }}
-                    >
-                      <Package size={16} />
-                      {t('modManager.mods')}
-                    </div>
-
                     {/* Actions */}
                     <div className="flex items-center gap-2 ml-auto">
                       {updateCount > 0 && (
@@ -1229,29 +1394,33 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                       </div>
                     ) : (
                       <div className="divide-y divide-white/5">
-                        {filteredMods.map((mod) => {
+                        {filteredMods.map((mod, index) => {
                           const hasUpdate = modsWithUpdates.some(u => u.id === mod.id);
                           const isSelected = selectedMods.has(mod.id);
 
                           return (
                             <div
                               key={mod.id}
+                              onClick={(e) => {
+                                if (e.shiftKey) {
+                                  handleContentShiftLeftClick(e, index);
+                                  return;
+                                }
+                                contentSelectionAnchorRef.current = index;
+                              }}
                               className={`px-4 py-3 flex items-center gap-3 hover:bg-white/5 transition-colors ${
                                 isSelected ? 'bg-white/5' : ''
                               }`}
                             >
                               {/* Selection Checkbox */}
                               <button
-                                onClick={() => {
-                                  setSelectedMods(prev => {
-                                    const next = new Set(prev);
-                                    if (next.has(mod.id)) {
-                                      next.delete(mod.id);
-                                    } else {
-                                      next.add(mod.id);
-                                    }
-                                    return next;
-                                  });
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (e.shiftKey) {
+                                    handleContentShiftLeftClick(e, index);
+                                    return;
+                                  }
+                                  toggleContentModSelection(mod.id, index);
                                 }}
                                 className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
                                   isSelected ? '' : 'bg-transparent border-white/30 hover:border-white/50'
@@ -1273,7 +1442,13 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                               {/* Mod Info */}
                               <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                  <p className="text-white font-medium truncate">{mod.name}</p>
+                                  <button
+                                    onClick={(e) => handleOpenModPage(e, mod)}
+                                    className="text-white font-medium truncate hover:underline underline-offset-2 text-left"
+                                    title="Open CurseForge page"
+                                  >
+                                    {mod.name}
+                                  </button>
                                   {hasUpdate && (
                                     <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-500/20 text-green-400">
                                       {t('modManager.updateBadge')}
@@ -1410,10 +1585,10 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                     ) : (
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                         {saves.map((save) => (
-                          <button
+                          <div
                             key={save.name}
                             onClick={() => OpenSaveFolder(selectedInstance!.branch, selectedInstance!.version, save.name)}
-                            className="group relative rounded-xl overflow-hidden border border-white/10 hover:border-white/20 transition-all bg-white/5 hover:bg-white/10"
+                            className="group relative rounded-xl overflow-hidden border border-white/10 hover:border-white/20 transition-all bg-white/5 hover:bg-white/10 cursor-pointer"
                           >
                             {/* Preview Image */}
                             <div className="aspect-video w-full bg-black/40 flex items-center justify-center overflow-hidden">
@@ -1450,13 +1625,26 @@ export const InstancesPage: React.FC<InstancesPageProps> = ({
                             </div>
 
                             {/* Hover Overlay */}
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <span className="text-white text-sm font-medium flex items-center gap-2">
-                                <FolderOpen size={16} />
+                            <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  OpenSaveFolder(selectedInstance!.branch, selectedInstance!.version, save.name);
+                                }}
+                                className="px-6 py-3 rounded-xl bg-white/20 hover:bg-white/30 text-white text-sm font-semibold flex items-center justify-center gap-2 min-w-[200px]"
+                              >
+                                <FolderOpen size={18} />
                                 {t('common.openFolder')}
-                              </span>
+                              </button>
+                              <button
+                                onClick={(e) => handleDeleteSave(e, save.name)}
+                                className="px-6 py-3 rounded-xl bg-red-500/30 hover:bg-red-500/40 text-red-100 text-sm font-semibold flex items-center justify-center gap-2 min-w-[200px]"
+                              >
+                                <Trash2 size={18} />
+                                {t('common.delete')}
+                              </button>
                             </div>
-                          </button>
+                          </div>
                         ))}
                       </div>
                     )}

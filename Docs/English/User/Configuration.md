@@ -57,15 +57,18 @@ Instead of a single game installation, HyPrism uses **instances** — isolated g
 
 ### Instance Structure
 
-Each instance is stored in `Instances/{GUID}/` where `{GUID}` is a unique identifier:
+Each instance is stored in a version-based folder under its branch:
 
 ```
 Instances/
-├── a1b2c3d4-e5f6-7890-abcd-ef1234567890/
-│   ├── game/           # Game files
-│   ├── mods/           # Installed mods
-│   └── instance.json   # Instance metadata
-└── ...
+└── release/
+	├── v8/
+	│   ├── game/           # Game files
+	│   ├── mods/           # Installed mods
+	│   └── meta.json       # Instance metadata (includes internal ID)
+	├── latest/
+	│   └── ...
+	└── ...
 ```
 
 ### Managing Instances
@@ -74,6 +77,7 @@ Instances/
 - **Switch** — Select which instance to launch
 - **Delete** — Remove an instance (confirmation required)
 - **View details** — See version, patch status, installed mods
+- **Dashboard switcher** — Use the icon button left of Play to open a dropdown with instance names + icons, plus a quick **Create Instance** action
 
 ## Profiles
 
@@ -102,6 +106,55 @@ Profiles/
 Use the profile menu to:
 - **Backup skin** — Save current skin to profile
 - **Restore skin** — Apply backed up skin to account
+
+## Mod Compatibility Safety
+
+Before launch, HyPrism validates `UserData/Mods` for known-incompatible server mod metadata.
+
+- Mods with a `ServerVersion` in the format `YYYY.MM.DD-<build>` are automatically moved to:
+	- `UserData/DisabledMods/IncompatibleServerVersion`
+- This prevents Hytale's singleplayer server crash (`Invalid X-Range` / `Server failed to boot`).
+- You can re-enable a moved mod manually by moving the `.jar` back to `UserData/Mods`.
+
+## Installed Mods Selection Shortcuts
+
+In both **Installed Mods** and **Browse Mods** tabs, HyPrism supports faster multi-select for mods:
+
+- Use **Shift + Left Click** to replace the current selection with the range from your anchor mod to the clicked mod.
+- A normal click first sets the selection anchor for later Shift range selection.
+
+## Instances and Worlds Quick Actions
+
+- In the instance list, **Right Click** opens the same instance actions menu as the 3-dots button (Edit, Open Folder, Open Mods Folder, Export, Delete).
+- In the **Worlds** tab, world cards now expose hover actions for **Open Folder** and **Delete**.
+
+## CurseForge Mod Page Shortcut
+
+- Clicking a mod name in the mod lists/details opens that mod's CurseForge page in your default browser.
+
+## Logs in Settings
+
+- The launcher logs are available directly inside the **Settings** sidebar as a dedicated **Logs** tab.
+- The Logs tab fills the settings content area and keeps its scroll region aligned to the panel border.
+- Logs are no longer shown as a separate main navigation page.
+
+## macOS Menu Bar
+
+- On macOS, HyPrism provides launcher actions in the app menu bar (for example **Settings**, **Instances**, and **Quit**).
+
+## Default Mods Folder
+
+- The default managed mods directory is under instance user data:
+	- `HyPrism/Instances/<branch>/v<version>/UserData/Mods`
+- This replaces legacy `Client/mods` for default mod storage and operations.
+
+## Custom Auth Launch Behavior
+
+For non-official profiles using custom auth domains, HyPrism launches in **online authenticated mode**.
+
+- Client and server binaries are patched for custom auth domains (for example `sanasol.ws`).
+- Launch identity prefers auth-server profile name fields to reduce owner-name/token mismatch issues.
+- Dashboard and Instances views both expose game stop controls while the game is running.
 
 ## Configuration File
 

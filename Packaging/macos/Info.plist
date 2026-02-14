@@ -7,7 +7,7 @@
     <key>CFBundleExecutable</key>
     <string>HyPrism</string>
     <key>CFBundleIconFile</key>
-    <string>hyprism-macos.icns</string>
+    <string>icon.icns</string>
     <key>CFBundleIdentifier</key>
     <string>dev.hyprism.HyPrism</string>
     <key>CFBundleInfoDictionaryVersion</key>

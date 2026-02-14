@@ -89,6 +89,7 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
   const [selectedMods, setSelectedMods] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const browseSelectionAnchorRef = useRef<number | null>(null);
 
   // --- Mod files cache ---
   const [modFilesCache, setModFilesCache] = useState<Map<string, ModFileInfo[]>>(new Map());
@@ -235,13 +236,54 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
     setIsLoadingModFiles(false);
   };
 
-  const toggleModSelection = async (mod: ModInfo) => {
-    setSelectedMods(prev => {
+  const getCurseForgeUrl = useCallback((mod: ModInfo): string => {
+    if (mod.slug) {
+      return `https://www.curseforge.com/hytale/mods/${mod.slug}`;
+    }
+    return `https://www.curseforge.com/hytale/mods/search?search=${encodeURIComponent(mod.name || String(mod.id))}`;
+  }, []);
+
+  const handleOpenModPage = useCallback((e: React.MouseEvent, mod: ModInfo) => {
+    e.preventDefault();
+    e.stopPropagation();
+    ipc.browser.open(getCurseForgeUrl(mod));
+  }, [getCurseForgeUrl]);
+
+  const toggleModSelection = (mod: ModInfo, index: number) => {
+    let shouldPrefetch = false;
+    setSelectedMods((prev) => {
       const next = new Set(prev);
-      if (next.has(mod.id)) next.delete(mod.id);
-      else { next.add(mod.id); loadModFiles(mod.id); }
+      if (next.has(mod.id)) {
+        next.delete(mod.id);
+      } else {
+        next.add(mod.id);
+        shouldPrefetch = true;
+      }
       return next;
     });
+    browseSelectionAnchorRef.current = index;
+    if (shouldPrefetch) {
+      void loadModFiles(mod.id);
+    }
+  };
+
+  const handleBrowseShiftLeftClick = (e: React.MouseEvent, index: number) => {
+    if (!e.shiftKey) {
+      return;
+    }
+
+    e.preventDefault();
+
+    if (searchResults.length === 0) {
+      return;
+    }
+
+    const anchor = browseSelectionAnchorRef.current ?? index;
+    const start = Math.min(anchor, index);
+    const end = Math.max(anchor, index);
+    const ids = searchResults.slice(start, end + 1).map((mod) => mod.id);
+
+    setSelectedMods(new Set(ids));
   };
 
   // ------- Download -------
@@ -465,7 +507,7 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
           </div>
         </div>
 
-        {/* Batch download bar */}
+        {/* Batch download bar (only when mods are selected) */}
         {selectedMods.size > 0 && !isDownloading && (
           <div className="flex items-center justify-between px-3 py-2 rounded-xl border border-white/[0.08] bg-[#2c2c2e]">
             <span className="text-sm text-white/70">
@@ -575,7 +617,7 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-2">
-              {searchResults.map(mod => {
+              {searchResults.map((mod, index) => {
                 const isSelected = selectedMods.has(mod.id);
                 const isDetailSelected = selectedMod?.id === mod.id;
                 const isInstalled = installedModIds?.has(`cf-${mod.id}`) ?? false;
@@ -583,7 +625,14 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
                 return (
                   <div
                     key={mod.id}
-                    onClick={() => handleModClick(mod)}
+                    onClick={(e) => {
+                      if (e.shiftKey) {
+                        handleBrowseShiftLeftClick(e, index);
+                        return;
+                      }
+                      browseSelectionAnchorRef.current = index;
+                      handleModClick(mod);
+                    }}
                     className={`group flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border ${
                       isDetailSelected
                         ? 'border-white/20 bg-[#2c2c2e]'
@@ -594,7 +643,14 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
                   >
                     {/* Checkbox */}
                     <button
-                      onClick={e => { e.stopPropagation(); toggleModSelection(mod); }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        if (e.shiftKey) {
+                          handleBrowseShiftLeftClick(e, index);
+                          return;
+                        }
+                        toggleModSelection(mod, index);
+                      }}
                       className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
                         isSelected ? '' : 'bg-transparent border-white/30 hover:border-white/50'
                       }`}
@@ -615,7 +671,13 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
                     {/* Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-white font-medium truncate">{mod.name}</span>
+                        <button
+                          onClick={(e) => handleOpenModPage(e, mod)}
+                          className="text-white font-medium truncate hover:underline underline-offset-2 text-left"
+                          title="Open CurseForge page"
+                        >
+                          {mod.name}
+                        </button>
                         {isInstalled && (
                           <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-500/20 text-green-400 flex-shrink-0">
                             {t('modManager.installedBadge')}
@@ -673,7 +735,13 @@ export const InlineModBrowser: React.FC<InlineModBrowserProps> = ({
             >
               {/* Close detail */}
               <div className="flex items-center justify-between p-4 border-b border-white/[0.06]">
-                <h3 className="text-white font-bold text-lg truncate flex-1">{selectedMod.name}</h3>
+                <button
+                  onClick={(e) => handleOpenModPage(e, selectedMod)}
+                  className="text-white font-bold text-lg truncate flex-1 text-left hover:underline underline-offset-2"
+                  title="Open CurseForge page"
+                >
+                  {selectedMod.name}
+                </button>
                 <button
                   onClick={() => setSelectedMod(null)}
                   className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-all ml-2"

@@ -360,10 +360,10 @@
       "unknown": "Inconnue"
     },
     "tab": {
-      "content": "Contenu",
+      "content": "Mods",
       "worlds": "Mondes",
       "logs": "Journaux",
-      "browse": "Parcourir"
+      "browse": "Browse Mods"
     },
     "saves": "Sauvegardes",
     "noSaves": "Aucune sauvegarde trouvée",

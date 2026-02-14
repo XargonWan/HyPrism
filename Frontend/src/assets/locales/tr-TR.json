@@ -360,10 +360,10 @@
       "unknown": "Bilinmiyor"
     },
     "tab": {
-      "content": "İçerik",
+      "content": "Mods",
       "worlds": "Dünyalar",
       "logs": "Günlükler",
-      "browse": "Göz At"
+      "browse": "Browse Mods"
     },
     "saves": "Kayıtlar",
     "noSaves": "Kayıt bulunamadı",

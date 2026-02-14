@@ -498,12 +498,19 @@ public class LaunchService : ILaunchService
             var wrapper = "#!/bin/bash\n" +
                          "REAL_JAVA=\"$(cd \"$(dirname \"$0\")\" && pwd)/java.real\"\n" +
                          "ARGS=()\n" +
+                         "IS_SERVER=false\n" +
                          "for arg in \"$@\"; do\n" +
                          "  if [[ \"$arg\" == -XX:ShenandoahGCMode=* ]]; then\n" +
                          "    continue\n" +
                          "  fi\n" +
+                         "  if [[ \"$arg\" == *\"Server\"* ]] || [[ \"$arg\" == *\"server\"* ]]; then\n" +
+                         "    IS_SERVER=true\n" +
+                         "  fi\n" +
                          "  ARGS+=(\"$arg\")\n" +
                          "done\n" +
+                         "if $IS_SERVER; then\n" +
+                         "  unset JAVA_TOOL_OPTIONS\n" +
+                         "fi\n" +
                          "exec \"$REAL_JAVA\" \"${ARGS[@]}\"\n";
 
             File.WriteAllText(javaBin, wrapper);

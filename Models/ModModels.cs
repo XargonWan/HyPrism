@@ -83,6 +83,11 @@ public class InstalledMod
     /// The latest available version string from CurseForge (for update display).
     /// </summary>
     public string LatestVersion { get; set; } = "";
+
+    /// <summary>
+    /// Original file extension used before disabling (e.g. .jar or .zip).
+    /// </summary>
+    public string DisabledOriginalExtension { get; set; } = "";
 }
 
 /// <summary>

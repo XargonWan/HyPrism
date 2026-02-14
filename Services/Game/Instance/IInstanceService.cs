@@ -216,7 +216,8 @@ public interface IInstanceService
     /// Creates a new instance directory with the given ID and returns the path.
     /// </summary>
     /// <param name="branch">The game branch.</param>
-    /// <param name="instanceId">The unique instance ID (will be folder name).</param>
+    /// <param name="instanceId">The unique instance ID.</param>
+    /// <param name="version">The game version (used for folder naming, e.g. v8).</param>
     /// <returns>The absolute path to the new instance directory.</returns>
-    string CreateInstanceDirectory(string branch, string instanceId);
+    string CreateInstanceDirectory(string branch, string instanceId, int version = 0);
 }

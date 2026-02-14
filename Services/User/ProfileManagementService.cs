@@ -111,6 +111,16 @@ public class ProfileManagementService : IProfileManagementService
             var config = _configService.Configuration;
             config.Profiles ??= new List<Profile>();
             config.Profiles.Add(profile);
+            
+            // Auto-activate the first profile created
+            if (config.Profiles.Count == 1 || config.ActiveProfileIndex < 0)
+            {
+                config.ActiveProfileIndex = config.Profiles.Count - 1;
+                config.UUID = profile.UUID;
+                config.Nick = profile.Name;
+                Logger.Info("Profile", $"Auto-activated new profile '{profile.Name}'");
+            }
+            
             Logger.Info("Profile", $"Profile added to list. Total profiles: {config.Profiles.Count}");
             _configService.SaveConfig();
             Logger.Info("Profile", $"Config saved to disk");
@@ -533,14 +543,40 @@ public class ProfileManagementService : IProfileManagementService
         try
         {
             var config = _configService.Configuration;
-            if (config.ActiveProfileIndex < 0 || config.Profiles == null ||
-                config.ActiveProfileIndex >= config.Profiles.Count)
+            Profile? profile = null;
+
+            // Try active index first
+            if (config.ActiveProfileIndex >= 0 && config.Profiles != null &&
+                config.ActiveProfileIndex < config.Profiles.Count)
+            {
+                profile = config.Profiles[config.ActiveProfileIndex];
+            }
+            // Fallback: find profile matching current UUID
+            else if (config.Profiles != null && config.Profiles.Count > 0 && !string.IsNullOrWhiteSpace(config.UUID))
+            {
+                var idx = config.Profiles.FindIndex(p => p.UUID == config.UUID);
+                if (idx >= 0)
+                {
+                    profile = config.Profiles[idx];
+                    config.ActiveProfileIndex = idx;
+                    _configService.SaveConfig();
+                    Logger.Info("Profile", $"Auto-activated profile '{profile.Name}' by UUID match");
+                }
+            }
+            // Last resort: activate first profile
+            if (profile == null && config.Profiles != null && config.Profiles.Count > 0)
+            {
+                profile = config.Profiles[0];
+                config.ActiveProfileIndex = 0;
+                _configService.SaveConfig();
+                Logger.Info("Profile", $"Auto-activated first profile '{profile.Name}'");
+            }
+
+            if (profile == null)
             {
                 Logger.Warning("Profile", "No active profile to open folder for");
                 return false;
             }
-            
-            var profile = config.Profiles[config.ActiveProfileIndex];
             var profilesDir = GetProfilesFolder();
             var safeName = SanitizeFileName(profile.Name);
             var profileDir = Path.Combine(profilesDir, safeName);

@@ -141,18 +141,18 @@ export const EditInstanceModal: React.FC<EditInstanceModalProps> = ({
           {/* Content */}
           <div className="p-4 space-y-3">
             {/* Instance Name + Icon row */}
-            <div className="flex items-end gap-3">
+            <div className="flex items-center gap-3">
               {/* Icon Preview - compact */}
               <div className="flex flex-col items-center gap-1 flex-shrink-0">
                 <div 
-                  className="w-14 h-10 rounded-xl border-2 border-dashed flex items-center justify-center overflow-hidden cursor-pointer hover:border-white/40 transition-colors"
+                  className="w-14 h-14 rounded-2xl border-2 border-dashed flex items-center justify-center overflow-hidden cursor-pointer hover:border-white/40 transition-colors"
                   style={{ borderColor: iconPreview ? accentColor : 'rgba(255,255,255,0.2)' }}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   {iconPreview ? (
                     <img src={iconPreview} alt="Instance icon" className="w-full h-full object-cover" />
                   ) : (
-                    <Image size={18} className="text-white/30" />
+                    <Image size={22} className="text-white/30" />
                   )}
                 </div>
               </div>

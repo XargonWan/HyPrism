@@ -294,6 +294,7 @@ const _config = {
 const _game = {
   launch: (data?: unknown) => send('hyprism:game:launch', data),
   cancel: (data?: unknown) => send('hyprism:game:cancel', data),
+  stop: (data?: unknown) => invoke<boolean>('hyprism:game:stop', data),
   instances: () => invoke<InstalledInstance[]>('hyprism:game:instances'),
   isRunning: (data?: unknown) => invoke<boolean>('hyprism:game:isRunning', data),
   versions: (data?: unknown) => invoke<number[]>('hyprism:game:versions', data),

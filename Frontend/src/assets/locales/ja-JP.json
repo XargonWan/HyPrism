@@ -360,10 +360,10 @@
       "unknown": "不明"
     },
     "tab": {
-      "content": "コンテンツ",
+      "content": "Mods",
       "worlds": "ワールド",
       "logs": "ログ",
-      "browse": "参照"
+      "browse": "Browse Mods"
     },
     "saves": "セーブデータ",
     "noSaves": "セーブデータが見つかりません",

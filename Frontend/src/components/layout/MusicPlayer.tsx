@@ -30,13 +30,13 @@ interface MusicPlayerProps {
 
 export const MusicPlayer: React.FC<MusicPlayerProps> = memo(({ className = '', muted = false, forceMuted = false }) => {
   const { t } = useTranslation();
-  // Internal isMuted state removed - controlled by prop
   const [currentTrack, setCurrentTrack] = useState(() => 
     Math.floor(Math.random() * musicTracks.length)
   );
-  const [isFading, setIsFading] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fadeIntervalRef = useRef<number | null>(null);
+  // Use a ref for fading state to avoid stale closures in the mute/unmute effect
+  const isFadingRef = useRef(false);
   const targetVolumeRef = useRef(0.3);
 
   // Get a random track different from the current one
@@ -49,71 +49,85 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = memo(({ className = '', m
     return next;
   }, []);
 
-  // Handle forceMuted or muted prop change with smooth fade
-  useEffect(() => {
-    if (!audioRef.current) return;
-
-    const shouldBeSilent = muted || forceMuted;
-
+  // Helper to cancel any running fade
+  const cancelFade = useCallback(() => {
     if (fadeIntervalRef.current) {
       clearInterval(fadeIntervalRef.current);
       fadeIntervalRef.current = null;
     }
+    isFadingRef.current = false;
+  }, []);
 
-    if (shouldBeSilent && !isFading) {
-      setIsFading(true);
-      const startVolume = audioRef.current.volume;
+  // Handle forceMuted or muted prop change with smooth fade
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const shouldBeSilent = muted || forceMuted;
+
+    // Always cancel any in-progress fade before starting a new one
+    cancelFade();
+
+    if (shouldBeSilent) {
+      // Fade out: reduce volume then pause
+      isFadingRef.current = true;
+      const startVolume = audio.volume;
+      if (startVolume <= 0 || audio.paused) {
+        // Already silent/paused — just ensure it's paused
+        audio.pause();
+        isFadingRef.current = false;
+        return;
+      }
       const steps = 20;
-      const stepTime = 1000 / steps;
+      const stepTime = 50; // 1s total fade
       const volumeStep = startVolume / steps;
       let currentStep = 0;
 
       fadeIntervalRef.current = window.setInterval(() => {
         currentStep++;
-        if (audioRef.current) {
-          audioRef.current.volume = Math.max(0, startVolume - (volumeStep * currentStep));
-        }
+        const newVol = Math.max(0, startVolume - (volumeStep * currentStep));
+        audio.volume = newVol;
         if (currentStep >= steps) {
-          if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
-          if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-          }
-          setIsFading(false);
+          cancelFade();
+          audio.pause();
+          audio.volume = 0;
         }
       }, stepTime);
-    } else if (!shouldBeSilent && audioRef.current.paused) {
-      setIsFading(true);
+    } else {
+      // Unmute: start playback and fade in regardless of paused state
+      isFadingRef.current = true;
       const targetVolume = targetVolumeRef.current;
-      audioRef.current.volume = 0;
+      audio.volume = 0;
 
-      audioRef.current.play().catch(err => {
-        console.log('Failed to resume audio:', err);
-        setIsFading(false);
-        return;
-      });
+      const startFadeIn = () => {
+        const steps = 20;
+        const stepTime = 50; // 1s total fade
+        const volumeStep = targetVolume / steps;
+        let currentStep = 0;
 
-      const steps = 20;
-      const stepTime = 1000 / steps;
-      const volumeStep = targetVolume / steps;
-      let currentStep = 0;
+        fadeIntervalRef.current = window.setInterval(() => {
+          currentStep++;
+          audio.volume = Math.min(targetVolume, volumeStep * currentStep);
+          if (currentStep >= steps) {
+            cancelFade();
+          }
+        }, stepTime);
+      };
 
-      fadeIntervalRef.current = window.setInterval(() => {
-        currentStep++;
-        if (audioRef.current) {
-          audioRef.current.volume = Math.min(targetVolume, volumeStep * currentStep);
-        }
-        if (currentStep >= steps) {
-          if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
-          setIsFading(false);
-        }
-      }, stepTime);
+      // Always try to play (handles both paused and already-playing-at-zero-volume cases)
+      audio.play()
+        .then(startFadeIn)
+        .catch(err => {
+          console.log('Failed to resume audio:', err);
+          cancelFade();
+        });
     }
 
     return () => {
-      if (fadeIntervalRef.current) clearInterval(fadeIntervalRef.current);
+      // Only clean up interval on unmount, not on re-render
+      // The cancelFade() at the top of the effect handles re-entry
     };
-  }, [forceMuted, muted]);
+  }, [forceMuted, muted, cancelFade]);
 
   // Handle track ending - play next random track
   const handleEnded = useCallback(() => {
@@ -142,6 +156,11 @@ export const MusicPlayer: React.FC<MusicPlayerProps> = memo(({ className = '', m
       });
     }
   }, [currentTrack, muted, forceMuted]);
+
+  // Cleanup fade interval on unmount
+  useEffect(() => {
+    return () => cancelFade();
+  }, [cancelFade]);
 
   return (
     <audio

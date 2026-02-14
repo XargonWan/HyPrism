@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { motion } from 'framer-motion';
 import { useTranslation } from 'react-i18next';
 import { FileText, RefreshCw, Copy, Check, Download, Search } from 'lucide-react';
 import { useAccentColor } from '../contexts/AccentColorContext';
@@ -14,12 +13,6 @@ interface LogEntry {
   message: string;
   raw: string;
 }
-
-const pageVariants = {
-  initial: { opacity: 0, y: 12 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -12 },
-};
 
 const parseLogEntry = (line: string): LogEntry => {
   // Format: "HH:mm:ss | LVL | Category | Message"
@@ -55,7 +48,11 @@ const getLevelColor = (level: string): string => {
 
 // No longer using getLevelBgColor - logs have transparent background
 
-export const LogsPage: React.FC = () => {
+interface LogsPageProps {
+  embedded?: boolean;
+}
+
+export const LogsPage: React.FC<LogsPageProps> = ({ embedded = false }) => {
   const { t } = useTranslation();
   const { accentColor } = useAccentColor();
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -87,6 +84,7 @@ export const LogsPage: React.FC = () => {
 
   // Initial fetch
   useEffect(() => {
+    autoScrollRef.current = true;
     fetchLogs();
   }, []);
 
@@ -216,14 +214,7 @@ export const LogsPage: React.FC = () => {
   };
 
   return (
-    <motion.div
-      variants={pageVariants}
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      transition={{ duration: 0.3, ease: 'easeOut' }}
-      className="h-full flex flex-col px-8 pt-6 pb-28"
-    >
+    <div className={`h-full flex flex-col ${embedded ? 'px-6 pt-5 pb-5' : 'px-8 pt-6 pb-28'}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -329,11 +320,11 @@ export const LogsPage: React.FC = () => {
       </div>
 
       {/* Logs container */}
+      <div className="flex-1 rounded-xl overflow-hidden" style={panelStyle}>
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto rounded-xl font-mono text-xs"
-        style={{ ...panelStyle, scrollBehavior: 'smooth' }}
+        className="h-full overflow-y-auto font-mono text-xs"
       >
         {loading && logs.length === 0 ? (
           <div className="flex items-center justify-center h-full text-white/40">
@@ -375,6 +366,7 @@ export const LogsPage: React.FC = () => {
           </div>
         )}
       </div>
-    </motion.div>
+      </div>
+    </div>
   );
 };

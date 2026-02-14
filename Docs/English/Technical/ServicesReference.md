@@ -10,6 +10,7 @@ All services are registered as singletons in `Bootstrapper.cs` and injected via 
 - **Key method:** `RegisterAll()` — registers all IPC handlers
 - **Annotations:** Contains `@type` and `@ipc` doc comments used by code generator
 - **Domains:** config, game, news, profile, settings, i18n, window, browser, mods, console
+- **Instance saves handlers:** supports listing saves, opening save folders, and deleting save folders via IPC (`hyprism:instance:saves`, `hyprism:instance:openSaveFolder`, `hyprism:instance:deleteSave`)
 
 ### ConfigService
 - **File:** `Services/Core/ConfigService.cs`
@@ -50,6 +51,9 @@ All services are registered as singletons in `Bootstrapper.cs` and injected via 
 ### GameSessionService
 - **Purpose:** Manages game lifecycle — download, install, patch, launch
 - **States:** preparing → download → install → patching → launching → running → stopped
+- **Auth launch behavior:** In authenticated mode, launch identity/name is derived from token claims when available to avoid server-side username mismatch shutdowns.
+- **Custom auth mode:** Non-official profiles can launch in online authenticated mode with client + server patching for custom session domains.
+- **Stop control:** Game stop is available through IPC (`hyprism:game:stop`) and can be triggered from Dashboard and Instances actions.
 
 ### ClientPatcher ⚠️
 - **File:** `Services/Game/ClientPatcher.cs`
@@ -58,6 +62,7 @@ All services are registered as singletons in `Bootstrapper.cs` and injected via 
 
 ### ModService
 - **Purpose:** Mod listing, searching, and management (CurseForge integration)
+- **Instance mods source:** Reads from `UserData/Mods` and falls back to file-system discovery (`.jar`, `.zip`, `.disabled`) when manifest entries are missing
 
 ## User Services (`Services/User/`)
 

@@ -150,7 +150,7 @@ public class AuthService
                 Token = token,
                 SessionToken = result.SessionToken ?? result.SessionTokenAlt ?? token, // Use session token if available, otherwise reuse identity token
                 UUID = result.UUID ?? uuid,
-                Name = result.Name ?? playerName
+                Name = result.Name ?? result.Username ?? result.Profile?.Username ?? result.Profile?.Name ?? playerName
             };
         }
         catch (HttpRequestException ex)
@@ -233,6 +233,12 @@ public class GameSessionResponse
     [JsonPropertyName("name")]
     public string? Name { get; set; }
 
+    [JsonPropertyName("username")]
+    public string? Username { get; set; }
+
+    [JsonPropertyName("profile")]
+    public GameSessionProfile? Profile { get; set; }
+
     [JsonPropertyName("expiresAt")]
     public DateTime? ExpiresAt { get; set; }
 
@@ -241,6 +247,15 @@ public class GameSessionResponse
 
     [JsonPropertyName("tokenType")]
     public string? TokenType { get; set; }
+}
+
+public class GameSessionProfile
+{
+    [JsonPropertyName("username")]
+    public string? Username { get; set; }
+
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
 }
 
 public class AuthTokenResult

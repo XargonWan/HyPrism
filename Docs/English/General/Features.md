@@ -2,10 +2,11 @@
 
 ## Instance Management
 
-- **GUID-based instances** — Each game installation gets a unique folder (`Instances/{GUID}/`), allowing multiple parallel installations
+- **Version-based instance folders** — Installations are organized by branch/version (for example `Instances/release/v8/`) while retaining internal IDs in metadata
 - **Multi-instance support** — Run different game versions, mod configurations, or test setups simultaneously
 - **Instance metadata** — Track installation state, version, patch status, and mod list per instance
 - **Instance deletion** — Clean removal of game files with confirmation
+- **Dashboard quick switcher** — Icon-only current instance selector (left of Play) opens a dropdown with instance icons + names
 
 ## Authentication
 
@@ -37,6 +38,7 @@
 - **CurseForge integration** — Browse, search, and download mods from CurseForge
 - **Installed mods view** — Manage installed modifications per instance
 - **Mod metadata** — Version, author, description, download count, dependencies
+- **Default mods location** — Uses `UserData/Mods` inside each instance (`Instances/<branch>/v<version>/UserData/Mods`)
 
 ## Social & News
 
@@ -49,6 +51,11 @@
 - **Framer Motion animations** — Smooth page transitions and micro-interactions
 - **Responsive layout** — Sidebar navigation, dashboard, news feed, settings, mod manager
 - **Accent color customization** — Personalize the theme color
+- **Settings-integrated logs** — Read launcher logs directly from the Settings sidebar Logs tab
+
+## Platform Integration
+
+- **macOS app menu actions** — Native menu bar entries for launcher navigation (Settings, Instances, Quit)
 
 ## Internationalization
 
