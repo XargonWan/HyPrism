@@ -33,6 +33,8 @@ Access settings through the **Settings** page (gear icon in sidebar).
 | Sound | Game sound enabled | true |
 | GPU preference | Graphics adapter selection | auto |
 
+- **Optimization mods installer** now asks which instance should receive optimization mods before installation.
+
 #### GPU Preference Options
 
 | Value | Description |
@@ -78,6 +80,14 @@ Instances/
 - **Delete** — Remove an instance (confirmation required)
 - **View details** — See version, patch status, installed mods
 - **Dashboard switcher** — Use the icon button left of Play to open a dropdown with instance names + icons, plus a quick **Create Instance** action
+- **Dashboard icon fallback** — If a custom icon cannot be loaded, the switcher now falls back to the version badge instead of showing an empty icon slot
+- **Centered play action** — The main Play button stays centered on the dashboard even when the instance switcher is visible
+- **Per-instance icon fidelity** — Dashboard custom icons are validated against the target instance path to avoid showing another instance's icon
+- **Full icon tiles** — Custom instance icons fill their switcher tiles for clearer visual identity
+
+### Data Folder Quick Action
+
+- In **Settings → Data**, the **Open Launcher Folder** button opens the launcher data directory in your file manager.
 
 ## Profiles
 

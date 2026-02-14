@@ -111,6 +111,30 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
     };
   }, [props.instances, instanceIconMap]);
 
+  useEffect(() => {
+    const selected = props.selectedInstance;
+    if (!selected || instanceIconMap[selected.id]) {
+      return;
+    }
+
+    let cancelled = false;
+    const loadSelectedIcon = async () => {
+      try {
+        const icon = await ipc.instance.getIcon({ instanceId: selected.id });
+        if (!cancelled && icon) {
+          setInstanceIconMap((prev) => ({ ...prev, [selected.id]: icon }));
+        }
+      } catch {
+        // Ignore selected icon loading errors
+      }
+    };
+
+    loadSelectedIcon();
+    return () => {
+      cancelled = true;
+    };
+  }, [props.selectedInstance, instanceIconMap]);
+
   // Close switcher on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -176,23 +200,39 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
     return `${branchLabel} v${version}`;
   };
 
+  const doesIconPathMatchInstance = (inst: InstanceInfo, iconUrl: string) => {
+    if (!iconUrl) return false;
+    const normalized = decodeURIComponent(iconUrl).replace(/\\/g, '/').toLowerCase();
+    const branchSegment = `/${inst.branch.toLowerCase()}/`;
+    const idSegment = `/${inst.id.toLowerCase()}/`;
+    const versionSegment = inst.version > 0 ? `/v${inst.version}/` : '/latest/';
+    return normalized.includes(branchSegment) && (normalized.includes(versionSegment) || normalized.includes(idSegment));
+  };
+
   // Render an instance icon (custom image or version badge)
-  const renderInstanceIcon = (inst: InstanceInfo, size: number = 28) => {
+  const renderInstanceIcon = (inst: InstanceInfo, size: number = 28, full: boolean = false) => {
     const customIcon = instanceIconMap[inst.id];
-    if (customIcon) {
+    if (customIcon && doesIconPathMatchInstance(inst, customIcon)) {
       return (
         <img
           src={customIcon}
           alt=""
-          className="rounded-lg object-cover"
-          style={{ width: size, height: size }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          className={full ? 'w-full h-full object-cover rounded-[inherit]' : 'rounded-lg object-cover'}
+          style={full ? undefined : { width: size, height: size }}
+          onError={() => {
+            setInstanceIconMap((prev) => {
+              if (!prev[inst.id]) return prev;
+              const next = { ...prev };
+              delete next[inst.id];
+              return next;
+            });
+          }}
         />
       );
     }
     const versionLabel = inst.version === 0 ? '★' : `v${inst.version}`;
     return (
-      <span className="font-bold" style={{ color: accentColor, fontSize: size * 0.5 }}>
+      <span className="font-bold" style={{ color: accentColor, fontSize: full ? 20 : size * 0.5 }}>
         {versionLabel}
       </span>
     );
@@ -472,39 +512,37 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
         >
           {/* Button bar with relative positioning */}
           <div className="relative mt-7">
-            <div
-              className={`flex items-center h-14 gap-2`}
-            >
+            <div className="flex items-center h-14 gap-2">
               {/* Instance Switcher - icon button with dropdown */}
-              <AnimatePresence mode="wait">
-                {!shouldHideInfo && props.selectedInstance && props.instances.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, width: 0 }}
-                    animate={{ opacity: 1, width: 'auto' }}
-                    exit={{ opacity: 0, width: 0 }}
-                    transition={{ duration: 0.25, ease: 'easeInOut' }}
-                    className="relative flex items-center h-full"
-                    ref={switcherRef}
-                  >
-                    <button
-                      onClick={() => setIsSwitcherOpen((prev) => !prev)}
-                      className="h-16 w-16 flex items-center justify-center rounded-2xl bg-[#1c1c1e] border border-white/20 hover:border-white/30 active:scale-95 transition-all"
-                      title={getInstanceDisplayName()}
-                      aria-label={t('main.selectInstance')}
-                      aria-expanded={isSwitcherOpen}
+              <div className="w-14 h-14 relative flex items-center justify-center" ref={switcherRef}>
+                <AnimatePresence mode="wait">
+                  {!shouldHideInfo && props.selectedInstance && props.instances.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, width: 0 }}
+                      animate={{ opacity: 1, width: 'auto' }}
+                      exit={{ opacity: 0, width: 0 }}
+                      transition={{ duration: 0.25, ease: 'easeInOut' }}
+                      className="relative flex items-center h-full"
                     >
-                      {renderInstanceIcon(props.selectedInstance, 50)}
-                    </button>
+                      <button
+                        onClick={() => setIsSwitcherOpen((prev) => !prev)}
+                        className="h-14 w-14 flex items-center justify-center rounded-xl bg-[#1c1c1e] border border-white/20 hover:border-white/30 active:scale-95 transition-all overflow-hidden"
+                        title={getInstanceDisplayName()}
+                        aria-label={t('main.selectInstance')}
+                        aria-expanded={isSwitcherOpen}
+                      >
+                        {renderInstanceIcon(props.selectedInstance, 30, true)}
+                      </button>
 
-                    <AnimatePresence>
-                      {isSwitcherOpen && (
-                        <motion.div
-                          initial={{ opacity: 0, y: -6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -6 }}
-                          transition={{ duration: 0.14, ease: 'easeOut' }}
-                          className="absolute top-full left-0 mt-2 min-w-[260px] max-h-[320px] overflow-y-auto rounded-2xl bg-[#1a1a1a] border border-white/12 shadow-2xl z-50"
-                        >
+                      <AnimatePresence>
+                        {isSwitcherOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            transition={{ duration: 0.14, ease: 'easeOut' }}
+                            className="absolute top-full left-0 mt-2 min-w-[260px] max-h-[320px] overflow-y-auto rounded-2xl bg-[#1a1a1a] shadow-2xl z-50"
+                          >
                           {props.instances.map((inst) => {
                             const isSelected = inst.id === props.selectedInstance?.id;
                             return (
@@ -516,13 +554,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
                                 }`}
                               >
                                 <div
-                                  className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0 border"
+                                  className="w-9 h-9 rounded-md flex items-center justify-center flex-shrink-0 border overflow-hidden"
                                   style={{
                                     borderColor: isSelected ? `${accentColor}60` : 'rgba(255,255,255,0.12)',
                                     backgroundColor: isSelected ? `${accentColor}15` : 'rgba(255,255,255,0.04)',
                                   }}
                                 >
-                                  {renderInstanceIcon(inst, 24)}
+                                  {renderInstanceIcon(inst, 24, true)}
                                 </div>
                                 <div className="min-w-0 flex-1 flex flex-col items-start">
                                   <span className={`text-sm font-semibold truncate max-w-[170px] ${isSelected ? 'text-white' : 'text-white/75'}`}>
@@ -550,16 +588,20 @@ export const DashboardPage: React.FC<DashboardPageProps> = memo((props) => {
                             <span className="text-sm font-semibold">{t('instances.addInstance')}</span>
                           </button>
                         </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
 
               {/* Action Button (Play/Download/Update) */}
-              <div className="min-w-[140px] h-full flex items-center justify-center">
+              <div className="h-14 flex items-center justify-center">
                 {renderActionButton()}
               </div>
+
+              {/* Right spacer keeps play button centered like old layout */}
+              <div className="w-14 h-14" aria-hidden="true" />
             </div>
 
             {/* Progress Bar - only show when downloading and NOT in complete state */}
